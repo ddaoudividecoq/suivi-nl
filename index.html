@@ -1,0 +1,1552 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Régie CRM — suivi des newsletters</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16232F; --ink-2:#4A5866; --ink-3:#7C8896;
+    --paper:#E7EAEE; --surface:#FFFFFF; --surface-2:#F3F5F7;
+    --line:#D3D9DF; --line-2:#C0C8D0;
+    --ok:#2F855A; --ok-bg:#E4F1EA;
+    --warn:#B8860B; --warn-bg:#F6EDD6;
+    --late:#C0392B; --late-bg:#F7E3E0;
+    --sent:#5B6B7B; --sent-bg:#EAEDF0;
+    --v-accor:#B23A2E; --v-adidas:#2B5E8F; --v-bataclan:#6B4C9A; --v-groupe:#0F766E;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(22,35,47,.06), 0 4px 14px rgba(22,35,47,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Inter",system-ui,sans-serif; color:var(--ink);
+    background:var(--paper); line-height:1.5; -webkit-font-smoothing:antialiased;
+    padding:0 0 64px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+  header{padding:26px 0 18px;border-bottom:1px solid var(--line)}
+  .masthead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px}
+  .brand{display:flex;flex-direction:column;gap:2px}
+  .kicker{font-family:"Space Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+  h1{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:26px;margin:0;letter-spacing:-.01em}
+  .today{font-family:"Space Mono",monospace;font-size:12px;color:var(--ink-2);text-align:right}
+
+  .summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .chip{flex:1;min-width:132px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden}
+  .chip::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+  .chip.late::before{background:var(--late)} .chip.warn::before{background:var(--warn)}
+  .chip.ok::before{background:var(--ok)} .chip.sent::before{background:var(--sent)}
+  .chip .n{font-family:"Space Grotesk",sans-serif;font-size:28px;font-weight:600;line-height:1}
+  .chip .lbl{font-size:12px;color:var(--ink-2);font-weight:500}
+  .chip.late .n{color:var(--late)} .chip.warn .n{color:var(--warn)}
+  .chip.ok .n{color:var(--ok)} .chip.sent .n{color:var(--sent)}
+
+  .toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin:22px 0 16px}
+  .views{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px}
+  .views button{font-family:"Inter",sans-serif;font-size:13px;font-weight:500;border:0;background:transparent;color:var(--ink-2);padding:6px 14px;border-radius:6px;cursor:pointer}
+  .views button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .btn{font-family:"Inter",sans-serif;font-size:13px;font-weight:600;border:1px solid var(--ink);background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;cursor:pointer;transition:transform .08s ease,opacity .15s}
+  .btn:hover{opacity:.9} .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-2)}
+
+  /* ---- Kanban ---- */
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+  .col{background:transparent}
+  .col-head{display:flex;align-items:baseline;justify-content:space-between;padding:0 4px 10px;border-bottom:2px solid var(--line-2);margin-bottom:12px}
+  .col-head .ct{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:14px;letter-spacing:.01em}
+  .col-head .cn{font-family:"Space Mono",monospace;font-size:12px;color:var(--ink-3)}
+  .col-body{display:flex;flex-direction:column;gap:11px;min-height:40px}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--sent);border-radius:var(--radius);padding:13px 14px;box-shadow:var(--shadow);cursor:pointer;transition:transform .1s ease,box-shadow .15s}
+  .card:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(22,35,47,.08),0 10px 24px rgba(22,35,47,.08)}
+  .card.s-late{border-left-color:var(--late)} .card.s-warn{border-left-color:var(--warn)}
+  .card.s-ok{border-left-color:var(--ok)} .card.s-sent{border-left-color:var(--sent)}
+  .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .card .name{font-weight:600;font-size:14px;line-height:1.3;color:var(--ink)}
+  .timecode{font-family:"Space Mono",monospace;font-weight:700;font-size:15px;white-space:nowrap;letter-spacing:-.02em}
+  .s-late .timecode{color:var(--late)} .s-warn .timecode{color:var(--warn)}
+  .s-ok .timecode{color:var(--ok)} .s-sent .timecode{color:var(--sent)}
+
+  .meta{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
+  .venue{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);font-weight:500}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .tag{font-family:"Space Mono",monospace;font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+  .sendline{font-family:"Space Mono",monospace;font-size:11px;color:var(--ink-3);margin-top:8px}
+  .retard-badge{font-family:"Space Mono",monospace;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:4px}
+  .retard-badge.late{background:var(--late-bg);color:var(--late)}
+  .retard-badge.ok{background:var(--ok-bg);color:var(--ok)}
+  .retard-badge.sent{background:var(--sent-bg);color:var(--sent)}
+
+  .rail{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-top:11px}
+  .seg{height:5px;border-radius:3px;background:var(--line)}
+  .seg.done{background:var(--ink-3)}
+  .s-late .seg.cur{background:var(--late)} .s-warn .seg.cur{background:var(--warn)}
+  .s-ok .seg.cur{background:var(--ok)} .s-sent .seg.done{background:var(--sent)}
+
+  .card-actions{display:flex;gap:6px;margin-top:11px;opacity:0;max-height:0;overflow:hidden;transition:opacity .15s,max-height .15s}
+  .card:hover .card-actions,.card:focus-within .card-actions{opacity:1;max-height:44px}
+  .mini{font-family:"Inter";font-size:12px;font-weight:600;border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink-2);border-radius:6px;padding:5px 9px;cursor:pointer}
+  .mini:hover{background:var(--surface);color:var(--ink)}
+  .mini.adv{border-color:var(--ok);color:var(--ok)}
+  .mini:disabled{opacity:.4;cursor:not-allowed}
+
+  .empty-col{font-size:12px;color:var(--ink-3);font-style:italic;padding:10px 4px;text-align:center;border:1px dashed var(--line);border-radius:8px}
+
+  /* ---- Timeline ---- */
+  .tl-group{margin-bottom:26px}
+  .tl-head{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:2px;display:flex;justify-content:space-between}
+  .tl-head .cnt{font-family:"Space Mono",monospace;color:var(--ink-3);font-weight:400}
+  .row{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:16px;padding:13px 4px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+  .row:hover{background:var(--surface-2)}
+  .row .when{font-family:"Space Mono",monospace;font-size:12px;color:var(--ink-2)}
+  .row .when .tc{display:block;font-weight:700;font-size:14px;color:var(--ink)}
+  .row.s-late .when .tc{color:var(--late)} .row.s-warn .when .tc{color:var(--warn)}
+  .row.s-ok .when .tc{color:var(--ok)} .row.s-sent .when .tc{color:var(--sent)}
+  .row .body .name{font-weight:600;font-size:14px}
+  .row .rail{max-width:220px;margin-top:7px}
+  .status-pill{font-family:"Inter";font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap}
+  .status-pill.late{background:var(--late-bg);color:var(--late)}
+  .status-pill.warn{background:var(--warn-bg);color:var(--warn)}
+  .status-pill.ok{background:var(--ok-bg);color:var(--ok)}
+  .status-pill.sent{background:var(--sent-bg);color:var(--sent)}
+
+  /* ---- Modal ---- */
+  .overlay{position:fixed;inset:0;background:rgba(22,35,47,.42);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .overlay.show{display:flex}
+  .modal{background:var(--surface);border-radius:14px;width:100%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow:auto}
+  .modal h2{font-family:"Space Grotesk";font-weight:600;font-size:18px;margin:0 0 18px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+  .field input,.field select{width:100%;font-family:"Inter";font-size:14px;padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--ink)}
+  .field input:focus,.field select:focus{outline:2px solid var(--ink);outline-offset:-1px;border-color:var(--ink)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .reg-head{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;margin:16px 0 8px;font-size:11px;font-weight:600;color:var(--ink-3);font-family:"Space Mono",monospace}
+  .reg-head span{text-align:center}.reg-head span:first-child{text-align:left}
+  .reg-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
+  .reg-row .rv{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+  .reg-row input{width:100%;font-family:"Space Mono",monospace;font-size:14px;text-align:center;padding:7px 4px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
+  .reg-row input:focus{outline:2px solid var(--ink);outline-offset:-1px;border-color:var(--ink)}
+  .reg-warn{grid-column:1/-1;font-size:11px;color:var(--warn);font-family:"Inter"}
+  .reg-sep{height:1px;background:var(--line-2);margin:18px 0 14px}
+  .reg-h3{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:14px;margin:0 0 10px}
+  .reg-statut-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+  .reg-statut-row .rs-lbl{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .reg-statut-row .rs-desc{font-size:11px;color:var(--ink-2);margin-top:3px;line-height:1.45}
+  .rs-input{display:flex;align-items:center;gap:5px;font-family:"Space Mono",monospace;font-size:13px;color:var(--ink-2)}
+  .rs-input input{width:56px;font-family:"Space Mono",monospace;font-size:14px;text-align:center;padding:7px 4px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
+  .rs-input input:focus{outline:2px solid var(--ink);outline-offset:-1px;border-color:var(--ink)}
+  .asana-ta{width:100%;min-height:130px;font-family:"Space Mono",monospace;font-size:12px;padding:10px 12px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--ink);resize:vertical;line-height:1.5}
+  .asana-ta:focus{outline:2px solid var(--ink);outline-offset:-1px}
+  .sync-grid{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+  .sync-toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer}
+  .sync-toggle input{width:15px;height:15px;accent-color:var(--ink);cursor:pointer}
+  .sync-freq{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2)}
+  .sync-freq input{width:56px;font-family:"Space Mono",monospace;font-size:14px;text-align:center;padding:6px 4px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
+  .sync-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .sync-status{font-family:"Space Mono",monospace;font-size:11px;margin-top:10px;min-height:15px}
+  .sync-status.ok{color:var(--ok)} .sync-status.err{color:var(--late)} .sync-status.run{color:var(--ink-2)}
+  .sync-summary{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;cursor:pointer;color:var(--ink-2);list-style:revert}
+  .sync-summary:hover{color:var(--ink)}
+  details#asana-manuel[open] .sync-summary{color:var(--ink)}
+  .prev-head{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;margin:18px 0 8px}
+  .prev-tools{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .prev-search{flex:1;display:flex;align-items:center;gap:7px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;background:var(--surface)}
+  .prev-search span{color:var(--ink-3);font-size:15px}
+  .prev-search input{flex:1;border:0;outline:0;background:transparent;font-family:"Inter";font-size:13px;padding:8px 0;color:var(--ink)}
+  .linkbtn{border:0;background:none;color:var(--ink-2);font-family:"Inter";font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;padding:4px}
+  .linkbtn:hover{color:var(--ink);text-decoration:underline}
+  .prev-list{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .prev-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-bottom:1px solid var(--line);font-size:12px}
+  .prev-row:last-child{border-bottom:0}
+  .prev-row.disabled{opacity:.5}
+  .prev-row input[type=checkbox]{width:15px;height:15px;flex:none;cursor:pointer;accent-color:var(--ink)}
+  .prev-row .pv-spacer{width:15px;flex:none}
+  .prev-row .pv-tag{font-family:"Space Mono",monospace;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;flex:none}
+  .pv-upd{background:var(--warn-bg);color:var(--warn)} .pv-new{background:var(--ok-bg);color:var(--ok)}
+  .pv-same{background:var(--sent-bg);color:var(--sent)} .pv-none{background:var(--late-bg);color:var(--late)}
+  .prev-row .pv-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+  .prev-row .pv-date{font-family:"Space Mono",monospace;color:var(--ink-2);white-space:nowrap}
+  .prev-empty{padding:14px;text-align:center;color:var(--ink-3);font-size:12px}
+  .modal-actions{display:flex;justify-content:space-between;align-items:center;margin-top:22px}
+  .del{font-size:13px;color:var(--late);background:none;border:0;cursor:pointer;font-weight:500}
+  .right-actions{display:flex;gap:10px}
+
+  /* ---- Synthèse (tableau de bord) ---- */
+  .dash{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+  .dash-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+  .dash-card h3{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;margin:0 0 14px;letter-spacing:.01em;display:flex;align-items:center;justify-content:space-between}
+  .dash-card h3 .h-note{font-family:"Space Mono",monospace;font-size:11px;font-weight:400;color:var(--ink-3)}
+  .col-4{grid-column:span 4} .col-6{grid-column:span 6} .col-8{grid-column:span 8} .col-12{grid-column:span 12}
+  .kpi-big{display:flex;align-items:baseline;gap:8px}
+  .kpi-big .v{font-family:"Space Grotesk",sans-serif;font-size:40px;font-weight:600;line-height:1}
+  .kpi-big .u{font-size:13px;color:var(--ink-2)}
+  .kpi-sub{font-size:12px;color:var(--ink-2);margin-top:6px}
+  .gauge{height:8px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:12px;display:flex}
+  .gauge .seg-ok{background:var(--ok)} .gauge .seg-warn{background:var(--warn)} .gauge .seg-late{background:var(--late)}
+  .rank{display:flex;flex-direction:column;gap:11px}
+  .rank-row{display:grid;grid-template-columns:110px 1fr auto;align-items:center;gap:10px}
+  .rank-row .r-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rank-bar{height:16px;border-radius:4px;background:var(--surface-2);display:flex;overflow:hidden}
+  .rank-bar .b-late{background:var(--late)} .rank-bar .b-warn{background:var(--warn)} .rank-bar .b-ok{background:var(--ok)} .rank-bar .b-sent{background:var(--sent)}
+  .rank-row .r-val{font-family:"Space Mono",monospace;font-size:11px;color:var(--ink-2);white-space:nowrap}
+  .phase-bars{display:flex;flex-direction:column;gap:10px}
+  .phase-row{display:grid;grid-template-columns:80px 1fr 32px;align-items:center;gap:10px;font-size:12px}
+  .phase-row .p-lbl{font-weight:600}
+  .phase-row .p-track{height:14px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+  .phase-row .p-fill{height:100%;background:var(--ink-3);border-radius:4px}
+  .phase-row .p-n{font-family:"Space Mono",monospace;text-align:right;color:var(--ink-2)}
+  .next-list{display:flex;flex-direction:column}
+  .next-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line)}
+  .next-row:first-child{border-top:0}
+  .next-row .n-tc{font-family:"Space Mono",monospace;font-weight:700;font-size:13px;white-space:nowrap}
+  .next-row.s-late .n-tc{color:var(--late)} .next-row.s-warn .n-tc{color:var(--warn)} .next-row.s-ok .n-tc{color:var(--ok)} .next-row.s-sent .n-tc{color:var(--sent)}
+  .next-row .n-name{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .next-row .n-sub{font-size:11px;color:var(--ink-3)}
+  .next-row .n-pill{font-size:10px;font-weight:700;font-family:"Space Mono",monospace;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .n-pill.late{background:var(--late-bg);color:var(--late)} .n-pill.warn{background:var(--warn-bg);color:var(--warn)}
+  .n-pill.ok{background:var(--ok-bg);color:var(--ok)} .n-pill.sent{background:var(--sent-bg);color:var(--sent)}
+  .mini-split{display:flex;gap:8px;flex-wrap:wrap}
+  .mini-tag{display:flex;align-items:center;gap:6px;font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:20px;padding:4px 11px}
+  .mini-tag b{font-family:"Space Grotesk",sans-serif}
+  .dash-alert{grid-column:1/-1;background:var(--late-bg);border:1px solid var(--late);border-radius:var(--radius);padding:12px 16px;font-size:13px;color:var(--late);display:flex;align-items:center;gap:9px}
+  .dash-empty{grid-column:1/-1;text-align:center;color:var(--ink-3);padding:40px;font-size:13px}
+  @media (max-width:820px){ .col-4,.col-6,.col-8{grid-column:span 12} }
+
+  /* ---- Chronologie (frise) ---- */
+  .gantt-note{font-size:12px;color:var(--ink-3);margin-bottom:10px;font-family:"Space Mono",monospace}
+  .gantt-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+  .gantt-inner{position:relative}
+  .gantt-axis{display:flex;position:sticky;top:0;z-index:6;background:var(--surface-2);border-bottom:1px solid var(--line-2)}
+  .gantt-axis-pad{flex:none;position:sticky;left:0;z-index:7;background:var(--surface-2);border-right:1px solid var(--line-2)}
+  .axis-months{display:flex;border-bottom:1px solid var(--line)}
+  .axis-month{flex:none;font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:12px;color:var(--ink);padding:6px 8px;border-right:1px solid var(--line);text-transform:capitalize;white-space:nowrap}
+  .axis-weeks{display:flex}
+  .axis-week{flex:none;font-family:"Space Mono",monospace;font-size:11px;color:var(--ink-3);padding:4px 6px;border-right:1px solid var(--line);white-space:nowrap}
+  .gantt-today{position:absolute;top:0;bottom:0;width:2px;background:var(--late);z-index:3;opacity:.55}
+  .gantt-today::after{content:"auj.";position:absolute;top:2px;left:3px;font-family:"Space Mono";font-size:9px;color:var(--late);font-weight:700}
+  .gantt-row{display:flex;align-items:stretch;border-bottom:1px solid var(--line);min-height:60px;width:100%}
+  .gantt-row:hover{background:var(--surface-2)}
+  .gantt-label{flex:none;position:sticky;left:0;z-index:5;border-right:1px solid var(--line-2);padding:8px 12px;display:flex;flex-direction:column;justify-content:center;gap:2px;cursor:pointer;background-color:var(--surface)}
+  .gantt-row:hover .gantt-label{background-color:var(--surface-2)}
+  .gantt-label .gl-name{font-weight:600;font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gantt-label .gl-sub{font-size:11px;color:var(--ink-2);display:flex;align-items:center;gap:5px}
+  .gl-name-top{position:absolute;top:7px;font-family:"Inter";font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+  .gl-phase{position:absolute;bottom:7px;font-family:"Space Mono",monospace;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none}
+  .s-late .gl-phase{color:var(--late)} .s-warn .gl-phase{color:var(--warn)}
+  .s-ok .gl-phase{color:var(--ok)} .s-sent .gl-phase{color:var(--sent)}
+  .gantt-track{position:relative;flex:none;cursor:pointer}
+  .seg-bar{position:absolute;top:50%;transform:translateY(-50%);height:8px;background:var(--line);border-radius:2px}
+  .seg-bar.done{background:var(--ink-3)}
+  .seg-bar.first{border-top-left-radius:5px;border-bottom-left-radius:5px}
+  .seg-bar.last{border-top-right-radius:5px;border-bottom-right-radius:5px}
+  .s-late .seg-bar.cur{background:var(--late)} .s-warn .seg-bar.cur{background:var(--warn)}
+  .s-ok .seg-bar.cur{background:var(--ok)} .s-sent .seg-bar.done{background:var(--sent)}
+  .send-diamond{position:absolute;top:50%;width:11px;height:11px;transform:translate(-50%,-50%) rotate(45deg);border:2px solid var(--surface);z-index:2}
+  .s-late .send-diamond{background:var(--late)} .s-warn .send-diamond{background:var(--warn)}
+  .s-ok .send-diamond{background:var(--ok)} .s-sent .send-diamond{background:var(--sent)}
+  .tc-float{position:absolute;top:50%;transform:translateY(-50%);font-family:"Space Mono",monospace;font-size:10px;font-weight:700;white-space:nowrap}
+  .s-late .tc-float{color:var(--late)} .s-warn .tc-float{color:var(--warn)}
+  .s-ok .tc-float{color:var(--ok)} .s-sent .tc-float{color:var(--sent)}
+  .gantt-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:11px;color:var(--ink-2)}
+  .gantt-legend .lg{display:flex;align-items:center;gap:6px}
+  .lg .lg-seg{width:22px;height:6px;border-radius:2px}
+  .lg .lg-dia{width:9px;height:9px;transform:rotate(45deg)}
+
+  .loading{text-align:center;padding:80px 0;color:var(--ink-3);font-family:"Space Mono",monospace;font-size:13px}
+  .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-3);line-height:1.7}
+  .foot code{font-family:"Space Mono";background:var(--surface-2);padding:1px 5px;border-radius:4px}
+
+  @media (max-width:820px){ .board{grid-template-columns:1fr 1fr} }
+  @media (max-width:560px){ .board{grid-template-columns:1fr} .row{grid-template-columns:70px 1fr} .row .status-pill{grid-column:2;justify-self:start;margin-top:6px} }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  /* ---- Écran de connexion ---- */
+  #gate{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .gate-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px rgba(22,35,47,.12);width:100%;max-width:420px;padding:34px 32px}
+  .gate-card .kicker{font-family:"Space Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+  .gate-card h1{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:24px;margin:4px 0 6px}
+  .gate-card p{font-size:13px;color:var(--ink-2);margin:0 0 20px;line-height:1.5}
+  .gate-card label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+  .gate-card input{width:100%;font-family:"Inter";font-size:14px;padding:11px 13px;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);color:var(--ink)}
+  .gate-card input:focus{outline:2px solid var(--ink);outline-offset:-1px;border-color:var(--ink)}
+  .gate-btn{width:100%;margin-top:14px;font-family:"Inter";font-size:14px;font-weight:600;border:0;background:var(--ink);color:#fff;padding:12px;border-radius:9px;cursor:pointer}
+  .gate-btn:hover{opacity:.92} .gate-btn:disabled{opacity:.5;cursor:default}
+  .gate-msg{font-size:12px;margin-top:14px;line-height:1.5;min-height:16px}
+  .gate-msg.ok{color:var(--ok)} .gate-msg.err{color:var(--late)} .gate-msg.info{color:var(--ink-2)}
+  .gate-foot{font-size:11px;color:var(--ink-3);margin-top:22px;border-top:1px solid var(--line);padding-top:14px}
+  .userbar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-2)}
+  .userbar .u-mail{font-family:"Space Mono",monospace}
+  .userbar button{font-family:"Inter";font-size:12px;font-weight:500;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);border-radius:7px;padding:5px 10px;cursor:pointer}
+  .userbar button:hover{color:var(--ink)}
+</style>
+
+<div id="gate">
+  <div class="gate-card">
+    <span class="kicker">Régie CRM · Groupe PEC</span>
+    <h1>Suivi des newsletters</h1>
+    <p>Accès réservé aux collaborateurs du Groupe PEC. Saisissez votre adresse professionnelle : vous recevrez un lien de connexion par e-mail, sans mot de passe.</p>
+    <label for="gate-email">Adresse e-mail professionnelle</label>
+    <input id="gate-email" type="email" placeholder="prenom.nom@groupe-pec.com" autocomplete="email">
+    <button class="gate-btn" id="gate-btn" onclick="envoyerLien()">Recevoir mon lien de connexion</button>
+    <div class="gate-msg info" id="gate-msg"></div>
+    <div class="gate-foot">Seules les adresses <strong>@groupe-pec.com</strong> sont autorisées. Le lien reçu est valable 1 heure.</div>
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="masthead">
+      <div class="brand">
+        <span class="kicker">Régie CRM · suivi de production</span>
+        <h1>Newsletters &amp; campagnes</h1>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div class="userbar" id="userbar"></div>
+        <div class="today" id="today"></div>
+      </div>
+    </div>
+    <div class="summary" id="summary"></div>
+  </header>
+
+  <div class="toolbar">
+    <div class="views">
+      <button id="v-synthese" class="on" onclick="setView('synthese')">Synthèse</button>
+      <button id="v-board" onclick="setView('board')">Tableau</button>
+      <button id="v-timeline" onclick="setView('timeline')">Échéancier</button>
+      <button id="v-gantt" onclick="setView('gantt')">Chronologie</button>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn ghost" onclick="openReglages()">⚙ Réglages</button>
+      <button class="btn ghost" onclick="openAsana()">⟲ Sync Asana</button>
+      <button class="btn" onclick="openModal()">+ Nouvelle newsletter</button>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">Chargement du planning…</div>
+  <div id="dashboard" style="display:none"></div>
+  <div id="board" class="board" style="display:none"></div>
+  <div id="timeline" style="display:none"></div>
+  <div id="gantt" style="display:none"></div>
+
+  <div class="foot" id="foot" style="display:none"></div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modal-title">Nouvelle newsletter</h2>
+    <div class="field">
+      <label for="f-name">Nom (identique au nom de campagne dans Delight)</label>
+      <input id="f-name" placeholder="[BTC] Accor Arena — 2026-06">
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="f-venue">Salle / périmètre</label>
+        <select id="f-venue">
+          <option value="Accor Arena">Accor Arena</option>
+          <option value="Adidas Arena">Adidas Arena</option>
+          <option value="Bataclan">Bataclan</option>
+          <option value="PEC">PEC (One group one team)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-type">Cible</label>
+        <select id="f-type">
+          <option value="BTC">BTC</option>
+          <option value="BTB">BTB</option>
+          <option value="Interne">Interne</option>
+        </select>
+      </div>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="f-date">Date d'envoi prévue</label>
+        <input id="f-date" type="date">
+      </div>
+      <div class="field">
+        <label for="f-phase">Phase actuelle</label>
+        <select id="f-phase">
+          <option value="0">Rédaction</option>
+          <option value="1">Montage</option>
+          <option value="2">Validation</option>
+          <option value="3">Envoyée</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="f-datereelle">Date d'envoi réelle <span style="font-weight:400;color:var(--ink-3)">— renseignée automatiquement au passage en « Envoyée », modifiable</span></label>
+      <input id="f-datereelle" type="date">
+    </div>
+    <div class="modal-actions">
+      <button class="del" id="del-btn" onclick="deleteCurrent()" style="visibility:hidden">Supprimer</button>
+      <div class="right-actions">
+        <button class="btn ghost" onclick="closeModal()">Annuler</button>
+        <button class="btn" onclick="saveModal()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="reglages-overlay" onclick="if(event.target===this)closeReglages()">
+  <div class="modal" style="max-width:540px">
+    <h2>Règles de rétroplanning et de statut</h2>
+    <p style="font-size:12px;color:var(--ink-2);margin:0 0 4px">
+      Pour chaque salle, indiquez à combien de jours avant l'envoi débute la production, puis à partir de quand la newsletter doit être en montage et en validation. Ces seuils déterminent où l'on est <em>censé</em> en être — et donc le passage en « en retard ».
+    </p>
+    <div class="reg-head">
+      <span></span><span>Rédaction J−</span><span>Montage J−</span><span>Validation J−</span>
+    </div>
+    <div id="reg-rows"></div>
+
+    <div class="reg-sep"></div>
+    <h3 class="reg-h3">Statuts</h3>
+    <div class="reg-statut-row">
+      <div>
+        <div class="rs-lbl"><span class="status-pill warn" style="padding:1px 8px">À surveiller</span> fenêtre d'imminence</div>
+        <div class="rs-desc">Une NL à l'heure passe « à surveiller » à partir de ce nombre de jours avant l'envoi.</div>
+      </div>
+      <div class="rs-input"><span>J−</span><input id="reg-surveiller" type="number" min="0" max="30"></div>
+    </div>
+    <div class="reg-statut-row">
+      <div>
+        <div class="rs-lbl"><span class="status-pill late" style="padding:1px 8px">En retard</span> tolérance</div>
+        <div class="rs-desc">Nombre de jours de retard tolérés sur une phase avant de passer au rouge. En deçà, la NL est « à surveiller ».</div>
+      </div>
+      <div class="rs-input"><input id="reg-tolerance" type="number" min="0" max="30"><span>j</span></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="del" style="color:var(--ink-2)" onclick="resetReglages()">Réinitialiser</button>
+      <div class="right-actions">
+        <button class="btn ghost" onclick="closeReglages()">Annuler</button>
+        <button class="btn" onclick="saveReglagesModal()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="asana-overlay" onclick="if(event.target===this)closeAsana()">
+  <div class="modal" style="max-width:600px">
+    <h2>Synchronisation avec Asana</h2>
+
+    <div class="sync-auto">
+      <p style="font-size:12px;color:var(--ink-2);margin:0 0 10px">
+        Votre connecteur (script / n8n / Make) lit Asana et publie un flux <strong>JSON ou CSV</strong> (noms + dates d'envoi) à une URL. L'outil va le chercher automatiquement — sans token dans le navigateur. Sources adaptées : fichier brut GitHub, Google Sheet publié, webhook n8n/Make, table Supabase…
+      </p>
+      <div class="field" style="margin-bottom:10px">
+        <label for="sync-url">URL du flux</label>
+        <input id="sync-url" placeholder="https://…/newsletters.json">
+      </div>
+      <div class="sync-grid">
+        <label class="sync-toggle"><input type="checkbox" id="sync-actif"> Synchronisation automatique</label>
+        <div class="sync-freq">toutes les <input id="sync-min" type="number" min="0" max="1440"> min</div>
+      </div>
+      <label class="sync-toggle" style="margin-bottom:12px"><input type="checkbox" id="sync-creer"> Créer les newsletters absentes (salle et cible devinées d'après le nom)</label>
+      <div class="sync-actions">
+        <button class="btn" onclick="enregistrerSync()">Enregistrer</button>
+        <button class="btn ghost" onclick="syncDepuisSource(true)">Synchroniser maintenant</button>
+      </div>
+      <div id="sync-status" class="sync-status"></div>
+    </div>
+
+    <div class="reg-sep"></div>
+    <details id="asana-manuel">
+      <summary class="sync-summary">Deuxième solution — import manuel (CSV / JSON)</summary>
+      <div id="asana-import" style="margin-top:12px">
+        <p style="font-size:12px;color:var(--ink-2);margin:0 0 8px">
+          Dans Asana : <strong>⋯ → Exporter → CSV</strong>, ouvrez le fichier et collez son contenu. Le JSON de l'API est aussi accepté. Le rapprochement se fait sur le nom de la tâche.
+        </p>
+        <textarea id="asana-paste" class="asana-ta" placeholder="Name,Due Date,...&#10;[BTC] Accor Arena — envoi,2026-06-15,...&#10;&#10;— ou —&#10;&#10;[{&quot;name&quot;:&quot;[BTC] Accor Arena — envoi&quot;,&quot;due_on&quot;:&quot;2026-06-15&quot;}]"></textarea>
+        <button class="btn ghost" style="margin-top:8px" onclick="analyserColle()">Analyser</button>
+      </div>
+
+      <div id="asana-preview" style="display:none">
+        <div class="prev-head">Tâches détectées</div>
+        <div class="prev-tools">
+          <div class="prev-search">
+            <span>⌕</span>
+            <input id="asana-search" type="text" placeholder="Rechercher une tâche…" oninput="renderDiff()">
+          </div>
+          <button class="linkbtn" onclick="selectVisibles(true)">Tout cocher</button>
+          <button class="linkbtn" onclick="selectVisibles(false)">Tout décocher</button>
+        </div>
+        <div id="asana-diff" class="prev-list"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+          <span style="font-size:11px;color:var(--ink-3)" id="asana-count"></span>
+          <button class="btn" id="asana-apply" onclick="appliquerAsana()" style="display:none">Importer la sélection</button>
+        </div>
+      </div>
+    </details>
+
+    <div class="modal-actions">
+      <span></span>
+      <div class="right-actions">
+        <button class="btn ghost" onclick="closeAsana()">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  Règles de rétroplanning par salle (modifiables via ⚙ Réglages).
+//  Chaque valeur = nombre de jours AVANT l'envoi.
+//    prod       : début de la production
+//    montage    : à partir de ce J−, la NL doit être au moins en Montage
+//    validation : à partir de ce J−, elle doit être au moins en Validation
+//  Le jour J, elle doit être Envoyée.
+// ============================================================
+const REGLES_DEFAUT = {
+  "Accor Arena":  { prod:14, montage:7, validation:3 },
+  "Adidas Arena": { prod:14, montage:7, validation:3 },
+  "Bataclan":     { prod:12, montage:6, validation:3 },
+  "PEC":          { prod:7,  montage:4, validation:2 },
+  "default":      { prod:10, montage:5, validation:3 },
+};
+let regles = JSON.parse(JSON.stringify(REGLES_DEFAUT));
+function reglesSalle(venue){ return regles[venue] || regles["default"]; }
+
+// Règles de statut globales (modifiables via ⚙ Réglages)
+//   surveiller : jours avant l'envoi où une NL à l'heure passe « à surveiller »
+//   tolerance  : jours de retard tolérés sur une phase avant le rouge « en retard »
+const STATUTS_DEFAUT = { surveiller:2, tolerance:1 };
+let statutsRegles = { ...STATUTS_DEFAUT };
+
+// Synchronisation automatique depuis une URL de flux (publié par le connecteur)
+const SYNC_DEFAUT = { url:"", minutes:15, actif:false, creer:true };
+let syncCfg = { ...SYNC_DEFAUT };
+let syncTimer = null;
+
+const PHASES = ["Rédaction", "Montage", "Validation", "Envoyée"];
+const VENUE_COLOR = {
+  "Accor Arena":"var(--v-accor)", "Adidas Arena":"var(--v-adidas)",
+  "Bataclan":"var(--v-bataclan)", "PEC":"var(--v-groupe)"
+};
+// ====== Configuration Supabase ======
+const SUPABASE_URL = "https://gyitqxxjatjwvjzezdnu.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5aXRxeHhqYXRqd3ZqemV6ZG51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0OTMxMDAsImV4cCI6MjEwMzA2OTEwMH0.SOVkBKAH67hVPoQBveN5pKjns3YGoYz42KoYA2s10iI";
+const DOMAINE_AUTORISE = "@groupe-pec.com";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let utilisateur = null;
+
+// Réglages (rétroplanning, statuts, synchro) : stockés localement par navigateur
+const REGLES_KEY = "nl-tracker:regles:v1";
+const STATUTS_KEY = "nl-tracker:statuts:v1";
+const SYNC_KEY = "nl-tracker:sync:v1";
+function lsGet(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function lsSet(k,val){ try{ localStorage.setItem(k, JSON.stringify(val)); }catch(e){} }
+
+let data = [];
+let view = "synthese";
+let editingId = null;
+
+// ---------- utilitaires dates ----------
+function todayMidnight(){ const t=new Date(); t.setHours(0,0,0,0); return t; }
+function joursAvant(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+"T00:00:00");
+  return Math.round((d - todayMidnight())/86400000);
+}
+function timecode(nl){
+  if(nl.phase===3) return "ENVOYÉE";
+  const d = joursAvant(nl.date);
+  if(d===null) return "—";
+  if(d===0) return "JOUR J";
+  return d>0 ? "J−"+d : "J+"+Math.abs(d);
+}
+function frDate(dateStr){
+  if(!dateStr) return "";
+  return new Date(dateStr+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"});
+}
+
+// ---------- calcul du statut ----------
+function statut(nl){
+  if(nl.phase===3) return "sent";
+  const d = joursAvant(nl.date);
+  if(d===null) return "ok";
+  const r = reglesSalle(nl.venue);
+  const tol = statutsRegles.tolerance;
+  // phase minimale attendue (stricte)
+  let attendu = 0;
+  if(d <= r.montage) attendu = Math.max(attendu, 1);
+  if(d <= r.validation) attendu = Math.max(attendu, 2);
+  if(d <= 0) attendu = Math.max(attendu, 3);
+  // phase attendue avec tolérance (seuils repoussés de `tol` jours)
+  let attenduTol = 0;
+  if(d <= r.montage - tol) attenduTol = Math.max(attenduTol, 1);
+  if(d <= r.validation - tol) attenduTol = Math.max(attenduTol, 2);
+  if(d <= -tol) attenduTol = Math.max(attenduTol, 3);
+
+  if(nl.phase < attenduTol) return "late";                  // retard au-delà de la tolérance
+  if(nl.phase < attendu) return "warn";                     // légèrement en retard → à surveiller
+  if(d <= statutsRegles.surveiller) return "warn";          // à l'heure mais imminent
+  return "ok";
+}
+const STATUT_LABEL = { late:"En retard", warn:"À surveiller", ok:"À l'heure", sent:"Envoyée" };
+
+// Retard d'envoi = jours entre la date réelle et la date prévue (>0 = en retard, <0 = en avance)
+function retardEnvoi(nl){
+  if(nl.phase!==3 || !nl.date || !nl.dateReelle) return null;
+  const dp = new Date(nl.date+"T00:00:00");
+  const dr = new Date(nl.dateReelle+"T00:00:00");
+  return Math.round((dr - dp)/86400000);
+}
+function labelRetard(j){
+  if(j===null) return "";
+  if(j===0) return "à l'heure";
+  if(j>0) return "+"+j+" j";
+  return j+" j"; // ex. -2 j (en avance)
+}
+function classeRetard(j){
+  if(j===null) return "";
+  if(j>0) return "late";
+  if(j<0) return "ok";
+  return "sent";
+}
+
+// ---------- persistance : Supabase (newsletters) + localStorage (réglages) ----------
+function rowToNl(r){
+  return { id:r.id, name:r.name, venue:r.venue, type:r.type,
+           date:r.date, dateReelle:r.date_reelle, phase:r.phase, history:r.history||{} };
+}
+function nlToRow(nl){
+  return { id:nl.id, name:nl.name, venue:nl.venue, type:nl.type,
+           date:nl.date||null, date_reelle:nl.dateReelle||null,
+           phase:nl.phase, history:nl.history||{}, updated_at:new Date().toISOString() };
+}
+
+async function load(){
+  // Réglages depuis le stockage local
+  const rg = lsGet(REGLES_KEY); if(rg) regles = Object.assign(JSON.parse(JSON.stringify(REGLES_DEFAUT)), rg);
+  const st = lsGet(STATUTS_KEY); if(st) statutsRegles = Object.assign({ ...STATUTS_DEFAUT }, st);
+  const sy = lsGet(SYNC_KEY); if(sy) syncCfg = Object.assign({ ...SYNC_DEFAUT }, sy);
+  // Newsletters depuis Supabase
+  await reloadFromDb();
+}
+
+async function reloadFromDb(){
+  const { data:rows, error } = await sb.from("newsletters").select("*");
+  if(error){ console.error("Lecture Supabase impossible", error); return; }
+  data = (rows||[]).map(rowToNl);
+}
+
+// Enregistre (crée/met à jour) l'ensemble courant dans la base
+async function save(){
+  if(!data.length) return;
+  const { error } = await sb.from("newsletters").upsert(data.map(nlToRow));
+  if(error) console.error("Écriture Supabase impossible", error);
+}
+async function dbDelete(id){
+  const { error } = await sb.from("newsletters").delete().eq("id", id);
+  if(error) console.error("Suppression Supabase impossible", error);
+}
+
+// Abonnement temps réel : toute modification (par n'importe qui) recharge et réaffiche
+function ecouterTempsReel(){
+  sb.channel("newsletters-live")
+    .on("postgres_changes", { event:"*", schema:"public", table:"newsletters" }, async () => {
+      await reloadFromDb();
+      render();
+    })
+    .subscribe();
+}
+
+async function saveRegles(){ lsSet(REGLES_KEY, regles); }
+async function saveStatuts(){ lsSet(STATUTS_KEY, statutsRegles); }
+async function saveSync(){ lsSet(SYNC_KEY, syncCfg); }
+function seed(){
+  const t = todayMidnight();
+  const iso = off => { const x=new Date(t); x.setDate(x.getDate()+off); return x.toISOString().slice(0,10); };
+  const mk = (name,venue,type,off,phase,reelle)=>{
+    const o = {id:crypto.randomUUID(),name,venue,type,date:iso(off),phase};
+    if(reelle!==undefined) o.dateReelle = iso(reelle);
+    return o;
+  };
+  return [
+    mk("[BTC] Accor Arena — envoi","Accor Arena","BTC",2,2),
+    mk("[BTB] Accor Arena — envoi","Accor Arena","BTB",4,0),
+    mk("[BTC] Adidas Arena — envoi","Adidas Arena","BTC",9,0),
+    mk("[BTB] Adidas Arena — envoi","Adidas Arena","BTB",1,1),
+    mk("[BTC] Bataclan — envoi","Bataclan","BTC",-1,2),
+    mk("[BTB] Bataclan — envoi","Bataclan","BTB",6,1),
+    mk("[INT] One group one team — mensuelle","PEC","Interne",-3,3,-1),  // envoyée 2 j en retard
+    mk("[BTC] Accor Arena — mai","Accor Arena","BTC",-32,3,-30),         // 2 j en retard
+    mk("[BTB] Bataclan — mai","Bataclan","BTB",-34,3,-34),               // à l'heure
+    mk("[BTC] Adidas Arena — avril","Adidas Arena","BTC",-60,3,-57),     // 3 j en retard
+  ];
+}
+
+// ---------- rendu ----------
+function render(){
+  document.getElementById("today").innerHTML =
+    "Aujourd'hui<br><strong>"+todayMidnight().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+"</strong>";
+  renderSummary();
+  document.getElementById("dashboard").style.display="none";
+  document.getElementById("board").style.display="none";
+  document.getElementById("timeline").style.display="none";
+  document.getElementById("gantt").style.display="none";
+  if(view==="synthese") renderDashboard();
+  else if(view==="board") renderBoard();
+  else if(view==="timeline") renderTimeline();
+  else renderGantt();
+}
+
+function renderSummary(){
+  const c = {late:0,warn:0,ok:0,sent:0};
+  data.forEach(nl => c[statut(nl)]++);
+  const order = [["late","En retard"],["warn","À surveiller"],["ok","À l'heure"],["sent","Envoyées"]];
+  document.getElementById("summary").innerHTML = order.map(([k,l])=>
+    `<div class="chip ${k}"><span class="n">${c[k]}</span><span class="lbl">${l}</span></div>`
+  ).join("");
+}
+
+function railHTML(nl){
+  return `<div class="rail">${[0,1,2,3].map(i=>{
+    let cls = "seg";
+    if(i < nl.phase) cls += " done";
+    else if(i === nl.phase) cls += (nl.phase===3 ? " done" : " cur");
+    return `<div class="${cls}"></div>`;
+  }).join("")}</div>`;
+}
+
+function cardHTML(nl){
+  const s = statut(nl);
+  return `<div class="card s-${s}" onclick="openModal('${nl.id}')" tabindex="0">
+    <div class="card-top">
+      <span class="name">${escapeHtml(nl.name)}</span>
+      <span class="timecode">${timecode(nl)}</span>
+    </div>
+    <div class="meta">
+      <span class="venue"><span class="dot" style="background:${VENUE_COLOR[nl.venue]||'var(--ink-3)'}"></span>${nl.venue}</span>
+      <span class="tag">${nl.type}</span>
+    </div>
+    <div class="sendline">Envoi prévu · ${frDate(nl.date)||"à définir"}</div>
+    ${nl.phase===3 && nl.dateReelle ? `<div class="sendline">Envoyée · ${frDate(nl.dateReelle)}${retardEnvoi(nl)!==null ? ` <span class="retard-badge ${classeRetard(retardEnvoi(nl))}">${labelRetard(retardEnvoi(nl))}</span>` : ""}</div>` : ""}
+    ${railHTML(nl)}
+    <div class="card-actions" onclick="event.stopPropagation()">
+      <button class="mini" onclick="advance('${nl.id}',-1)" ${nl.phase<=0?"disabled":""}>← Reculer</button>
+      <button class="mini adv" onclick="advance('${nl.id}',1)" ${nl.phase>=3?"disabled":""}>Avancer →</button>
+    </div>
+  </div>`;
+}
+
+// ---------- vue Synthèse (tableau de bord) ----------
+function renderDashboard(){
+  const dash = document.getElementById("dashboard");
+  dash.style.display = "block";
+
+  if(!data.length){
+    dash.innerHTML = `<div class="dash"><div class="dash-empty">Aucune newsletter pour l'instant. Ajoutez-en ou lancez une synchro Asana pour voir les statistiques.</div></div>`;
+    return;
+  }
+
+  // Comptages globaux
+  const c = {late:0, warn:0, ok:0, sent:0};
+  data.forEach(nl => c[statut(nl)]++);
+  const actives = c.late + c.warn + c.ok;
+  const ponctualite = actives ? Math.round(100 * c.ok / actives) : 100;
+
+  // Par salle
+  const parSalle = {};
+  SALLES.forEach(v => parSalle[v] = {late:0, warn:0, ok:0, sent:0, total:0});
+  data.forEach(nl => {
+    const s = statut(nl);
+    if(!parSalle[nl.venue]) parSalle[nl.venue] = {late:0, warn:0, ok:0, sent:0, total:0};
+    parSalle[nl.venue][s]++;
+    parSalle[nl.venue].total++;
+  });
+  // classement par problèmes (retard puis à surveiller)
+  const classement = Object.entries(parSalle)
+    .map(([v,o]) => ({venue:v, ...o, souci:o.late*10 + o.warn}))
+    .filter(o => o.total > 0)
+    .sort((a,b) => b.souci - a.souci || b.total - a.total);
+  const maxTotal = Math.max(1, ...classement.map(o => o.total));
+
+  // Par phase
+  const parPhase = [0,0,0,0];
+  data.forEach(nl => parPhase[nl.phase]++);
+  const maxPhase = Math.max(1, ...parPhase);
+
+  // Prochains envois (non envoyées, avec date, triées)
+  const prochains = data.filter(nl => nl.phase < 3 && nl.date)
+    .sort((a,b) => a.date.localeCompare(b.date)).slice(0, 6);
+
+  // Par cible
+  const parType = {};
+  data.forEach(nl => parType[nl.type] = (parType[nl.type]||0) + 1);
+
+  // La plus en retard (nom)
+  const enRetard = data.filter(nl => statut(nl)==="late")
+    .sort((a,b) => (a.date||"z").localeCompare(b.date||"z"));
+
+  const dot = v => `<span class="dot" style="background:${VENUE_COLOR[v]||'var(--ink-3)'}"></span>`;
+
+  // --- Bloc alerte si retards ---
+  const alerte = c.late > 0
+    ? `<div class="dash-alert">⚠ ${c.late} newsletter${c.late>1?"s":""} en retard sur le rétroplanning${enRetard[0]?` — la plus urgente : « ${escapeHtml(enRetard[0].name)} »`:""}.</div>`
+    : "";
+
+  // --- Jauge de ponctualité ---
+  const g = n => actives ? (100*n/actives) : 0;
+  const jauge = `<div class="gauge">
+    <div class="seg-ok" style="width:${g(c.ok)}%"></div>
+    <div class="seg-warn" style="width:${g(c.warn)}%"></div>
+    <div class="seg-late" style="width:${g(c.late)}%"></div>
+  </div>`;
+
+  // --- Classement salles ---
+  const rankHTML = classement.map(o => {
+    const w = x => `${100*x/maxTotal}%`;
+    return `<div class="rank-row">
+      <span class="r-name">${dot(o.venue)}${o.venue}</span>
+      <div class="rank-bar">
+        <div class="b-late" style="width:${w(o.late)}"></div>
+        <div class="b-warn" style="width:${w(o.warn)}"></div>
+        <div class="b-ok" style="width:${w(o.ok)}"></div>
+        <div class="b-sent" style="width:${w(o.sent)}"></div>
+      </div>
+      <span class="r-val">${o.late?`${o.late} ret.`:""}${o.late&&o.warn?" · ":""}${o.warn?`${o.warn} surv.`:""}${(!o.late&&!o.warn)?"à jour":""}</span>
+    </div>`;
+  }).join("");
+
+  // --- Phases ---
+  const phaseHTML = PHASES.map((p,i) => `<div class="phase-row">
+    <span class="p-lbl">${p}</span>
+    <div class="p-track"><div class="p-fill" style="width:${100*parPhase[i]/maxPhase}%"></div></div>
+    <span class="p-n">${parPhase[i]}</span>
+  </div>`).join("");
+
+  // --- Prochains envois ---
+  const nextHTML = prochains.length ? prochains.map(nl => {
+    const s = statut(nl);
+    return `<div class="next-row s-${s}" onclick="openModal('${nl.id}')" style="cursor:pointer">
+      <span class="n-tc">${timecode(nl)}</span>
+      <div style="min-width:0"><div class="n-name">${escapeHtml(nl.name)}</div>
+        <div class="n-sub">${nl.venue} · ${nl.type} · ${PHASES[nl.phase]} · ${frDate(nl.date)}</div></div>
+      <span class="n-pill ${s}">${STATUT_LABEL[s]}</span>
+    </div>`;
+  }).join("") : `<div class="n-sub" style="padding:8px 0">Aucun envoi à venir.</div>`;
+
+  // --- Cibles ---
+  const typeHTML = Object.entries(parType).sort((a,b)=>b[1]-a[1])
+    .map(([t,n]) => `<div class="mini-tag"><b>${n}</b> ${t}</div>`).join("");
+
+  // --- Retards d'envoi (date réelle vs prévue) ---
+  const envoyees = data.filter(nl => retardEnvoi(nl) !== null)
+    .map(nl => ({nl, r: retardEnvoi(nl)}))
+    .sort((a,b) => (b.nl.dateReelle||"").localeCompare(a.nl.dateReelle||""));
+  let blocRetards = "";
+  if(envoyees.length){
+    const enRet = envoyees.filter(o => o.r > 0);
+    const moyen = Math.round(10 * envoyees.reduce((s,o)=>s+o.r,0) / envoyees.length) / 10;
+    const tauxEnvoi = Math.round(100 * (envoyees.length - enRet.length) / envoyees.length);
+    const lignes = envoyees.slice(0, 8).map(o => {
+      const cl = classeRetard(o.r);
+      return `<div class="next-row" onclick="openModal('${o.nl.id}')" style="cursor:pointer">
+        <span class="n-tc ${cl==='late'?'s-late':cl==='ok'?'s-ok':'s-sent'}">${labelRetard(o.r)}</span>
+        <div style="min-width:0"><div class="n-name">${escapeHtml(o.nl.name)}</div>
+          <div class="n-sub">${o.nl.venue} · prévue ${frDate(o.nl.date)} → envoyée ${frDate(o.nl.dateReelle)}</div></div>
+        <span class="n-pill ${cl}">${o.r>0?"en retard":o.r<0?"en avance":"à l'heure"}</span>
+      </div>`;
+    }).join("");
+    blocRetards = `
+    <div class="dash-card col-12">
+      <h3>Retards d'envoi <span class="h-note">date réelle vs date prévue · ${envoyees.length} envoi(s) mesuré(s)</span></h3>
+      <div style="display:flex;gap:28px;flex-wrap:wrap;margin-bottom:6px">
+        <div><div class="kpi-big"><span class="v ${moyen>0?'':''}" style="color:${moyen>0?'var(--late)':'var(--ok)'}">${moyen>0?'+':''}${moyen}<span class="u"> j</span></span></div><div class="kpi-sub">retard d'envoi moyen</div></div>
+        <div><div class="kpi-big"><span class="v">${enRet.length}<span class="u">/${envoyees.length}</span></span></div><div class="kpi-sub">envois en retard</div></div>
+        <div><div class="kpi-big"><span class="v" style="color:var(--ok)">${tauxEnvoi}<span class="u">%</span></span></div><div class="kpi-sub">partis à temps</div></div>
+      </div>
+      <div class="next-list" style="margin-top:6px">${lignes}</div>
+    </div>`;
+  } else {
+    blocRetards = `
+    <div class="dash-card col-12">
+      <h3>Retards d'envoi</h3>
+      <div class="kpi-sub">Aucun envoi mesuré pour l'instant. Le retard se calcule dès qu'une newsletter passe en « Envoyée » : sa date d'envoi réelle est comparée à la date prévue.</div>
+    </div>`;
+  }
+
+  dash.innerHTML = `<div class="dash">
+    ${alerte}
+
+    <div class="dash-card col-4">
+      <h3>Ponctualité</h3>
+      <div class="kpi-big"><span class="v">${ponctualite}<span class="u">%</span></span></div>
+      <div class="kpi-sub">${c.ok} à l'heure sur ${actives} en cours</div>
+      ${jauge}
+      <div class="kpi-sub" style="margin-top:8px">
+        <span style="color:var(--late)">■</span> ${c.late} en retard &nbsp;
+        <span style="color:var(--warn)">■</span> ${c.warn} à surveiller &nbsp;
+        <span style="color:var(--ok)">■</span> ${c.ok} à l'heure
+      </div>
+    </div>
+
+    <div class="dash-card col-8">
+      <h3>Salles les plus en tension <span class="h-note">retard · à surveiller · à l'heure · envoyées</span></h3>
+      <div class="rank">${rankHTML}</div>
+    </div>
+
+    <div class="dash-card col-4">
+      <h3>Répartition par phase</h3>
+      <div class="phase-bars">${phaseHTML}</div>
+      <div class="mini-split" style="margin-top:14px">${typeHTML}</div>
+    </div>
+
+    <div class="dash-card col-8">
+      <h3>Prochains envois <span class="h-note">${prochains.length} à venir</span></h3>
+      <div class="next-list">${nextHTML}</div>
+    </div>
+
+    ${blocRetards}
+  </div>`;
+}
+
+function renderBoard(){
+  const board = document.getElementById("board");
+  board.style.display="grid";
+  board.innerHTML = PHASES.map((p,idx)=>{
+    const items = data.filter(nl=>nl.phase===idx);
+    const body = items.length
+      ? items.sort((a,b)=>(a.date||"z").localeCompare(b.date||"z")).map(cardHTML).join("")
+      : `<div class="empty-col">Aucune</div>`;
+    return `<div class="col">
+      <div class="col-head"><span class="ct">${p}</span><span class="cn">${items.length}</span></div>
+      <div class="col-body">${body}</div>
+    </div>`;
+  }).join("");
+}
+
+function renderTimeline(){
+  const tl = document.getElementById("timeline");
+  tl.style.display="block";
+
+  const actives = data.filter(nl=>nl.phase<3).sort((a,b)=>(a.date||"z").localeCompare(b.date||"z"));
+  const sent = data.filter(nl=>nl.phase===3).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+
+  const groups = {retard:[],semaine:[],prochaine:[],apres:[]};
+  actives.forEach(nl=>{
+    const d = joursAvant(nl.date);
+    if(d===null){ groups.apres.push(nl); return; }
+    if(d < 0 || statut(nl)==="late") groups.retard.push(nl);
+    else if(d <= 7) groups.semaine.push(nl);
+    else if(d <= 14) groups.prochaine.push(nl);
+    else groups.apres.push(nl);
+  });
+
+  const section = (title,arr)=> arr.length ? `<div class="tl-group">
+      <div class="tl-head"><span>${title}</span><span class="cnt">${arr.length}</span></div>
+      ${arr.map(rowHTML).join("")}
+    </div>` : "";
+
+  tl.innerHTML =
+    section("À traiter en priorité", groups.retard) +
+    section("Cette semaine", groups.semaine) +
+    section("Semaine prochaine", groups.prochaine) +
+    section("Plus tard", groups.apres) +
+    section("Envoyées", sent);
+
+  if(!tl.innerHTML) tl.innerHTML = `<div class="empty-col">Aucune newsletter. Cliquez sur « Nouvelle newsletter » pour commencer.</div>`;
+}
+
+function rowHTML(nl){
+  const s = statut(nl);
+  return `<div class="row s-${s}" onclick="openModal('${nl.id}')">
+    <div class="when"><span class="tc">${timecode(nl)}</span>${frDate(nl.date)}</div>
+    <div class="body">
+      <span class="name">${escapeHtml(nl.name)}</span>
+      <span class="venue" style="margin-left:8px"><span class="dot" style="background:${VENUE_COLOR[nl.venue]||'var(--ink-3)'}"></span>${nl.venue} · ${nl.type} · ${PHASES[nl.phase]}</span>
+      ${railHTML(nl)}
+    </div>
+    <span class="status-pill ${s}">${STATUT_LABEL[s]}</span>
+  </div>`;
+}
+
+// ---------- vue chronologie (frise) ----------
+const DAY_W = 22;                 // largeur d'un jour en pixels
+const WEEK_W = DAY_W * 7;
+const LABEL_W = 220;
+
+function addDays(date, n){ const x=new Date(date); x.setDate(x.getDate()+n); return x; }
+function mondayOf(date){ const x=new Date(date); const wd=(x.getDay()+6)%7; return addDays(x,-wd); }
+function parseD(str){ return new Date(str+"T00:00:00"); }
+const MS = 86400000;
+
+function renderGantt(){
+  const g = document.getElementById("gantt");
+  g.style.display="block";
+
+  const dated = data.filter(nl=>nl.date);
+  const sansDate = data.length - dated.length;
+
+  if(dated.length===0){
+    g.innerHTML = `<div class="empty-col">Aucune newsletter avec date d'envoi. Ajoutez une date pour l'afficher sur la frise.</div>`;
+    return;
+  }
+
+  // Bornes : du lundi précédant (plus tôt des débuts de production) au dimanche suivant (plus tard des envois)
+  const today = todayMidnight();
+  let minD = addDays(today, -7), maxD = addDays(today, 21);
+  dated.forEach(nl=>{
+    const sd = parseD(nl.date);
+    const start = addDays(sd, -reglesSalle(nl.venue).prod);
+    if(start < minD) minD = start;
+    if(addDays(sd,4) > maxD) maxD = addDays(sd,4);
+  });
+  const rangeStart = mondayOf(minD);
+  const rangeEnd = addDays(mondayOf(maxD), 6);
+
+  const weeks = [];
+  for(let d=new Date(rangeStart); d<=rangeEnd; d=addDays(d,7)) weeks.push(new Date(d));
+  const timelineW = weeks.length * WEEK_W;
+  const totalW = LABEL_W + timelineW;
+
+  const xForDate = date => Math.round((date - rangeStart)/MS) * DAY_W;
+
+  // Bandeau des mois
+  const monthNames = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+  let months = [], cur=null;
+  weeks.forEach(w=>{
+    const key = w.getFullYear()+"-"+w.getMonth();
+    if(!cur || cur.key!==key){ cur={key,label:monthNames[w.getMonth()]+" "+w.getFullYear(),n:1}; months.push(cur); }
+    else cur.n++;
+  });
+  const monthsHTML = months.map(m=>`<div class="axis-month" style="width:${m.n*WEEK_W}px">${m.label}</div>`).join("");
+  const weeksHTML = weeks.map(w=>{
+    const end = addDays(w,6);
+    return `<div class="axis-week" style="width:${WEEK_W}px">${w.getDate()}–${end.getDate()}</div>`;
+  }).join("");
+
+  // Lignes (une par newsletter, triées par date d'envoi)
+  const rows = dated.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(nl=>{
+    const s = statut(nl);
+    const sd = parseD(nl.date);
+    const r = reglesSalle(nl.venue);
+    const xProd = xForDate(addDays(sd,-r.prod));
+    const xMont = xForDate(addDays(sd,-r.montage));
+    const xVal  = xForDate(addDays(sd,-r.validation));
+    const xSend = xForDate(sd);
+    const seg = (x0,x1,idx,first,last)=>{
+      let cls="seg-bar";
+      if(idx < nl.phase) cls+=" done";
+      else if(idx===nl.phase && nl.phase<3) cls+=" cur";
+      if(nl.phase===3) cls+=" done";
+      if(first) cls+=" first"; if(last) cls+=" last";
+      return `<div class="${cls}" style="left:${x0}px;width:${Math.max(2,x1-x0)}px"></div>`;
+    };
+    // le timecode flotte juste après le losange d'envoi
+    const tc = timecode(nl);
+    const barW = Math.max(2, xSend - xProd);
+    const phaseLbl = nl.phase===3 ? "Envoyée" : PHASES[nl.phase];
+    return `<div class="gantt-row s-${s}" onclick="openModal('${nl.id}')">
+      <div class="gantt-label" style="width:${LABEL_W}px">
+        <span class="gl-name">${escapeHtml(nl.name)}</span>
+        <span class="gl-sub"><span class="dot" style="background:${VENUE_COLOR[nl.venue]||'var(--ink-3)'};width:8px;height:8px"></span>${nl.venue} · ${nl.type}</span>
+      </div>
+      <div class="gantt-track" style="width:${timelineW}px">
+        <div class="gl-name-top" style="left:${xProd}px;max-width:${barW+140}px">${escapeHtml(nl.name)}</div>
+        ${seg(xProd,xMont,0,true,false)}
+        ${seg(xMont,xVal,1,false,false)}
+        ${seg(xVal,xSend,2,false,true)}
+        <div class="send-diamond" style="left:${xSend}px"></div>
+        <div class="tc-float" style="left:${xSend+12}px">${tc}</div>
+        <div class="gl-phase" style="left:${xProd}px">${phaseLbl}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const todayX = xForDate(today) + DAY_W/2;
+
+  g.innerHTML =
+    (sansDate ? `<div class="gantt-note">${sansDate} newsletter(s) sans date d'envoi — non affichée(s) ici.</div>` : "") +
+    `<div class="gantt-scroll" id="gantt-scroll">
+      <div class="gantt-inner" style="width:${totalW}px">
+        <div class="gantt-axis">
+          <div class="gantt-axis-pad" style="width:${LABEL_W}px">
+            <div class="axis-month" style="border:0;width:${LABEL_W}px">Newsletter</div>
+            <div class="axis-week" style="border:0;width:${LABEL_W}px">Runway de rédaction · envoi ◆</div>
+          </div>
+          <div style="width:${timelineW}px">
+            <div class="axis-months">${monthsHTML}</div>
+            <div class="axis-weeks">${weeksHTML}</div>
+          </div>
+        </div>
+        <div style="position:relative;width:${totalW}px">
+          <div class="gantt-today" style="left:${LABEL_W + todayX}px"></div>
+          ${rows}
+        </div>
+      </div>
+    </div>
+    <div class="gantt-legend">
+      <span class="lg"><span class="lg-seg" style="background:var(--ink-3)"></span>Phase terminée</span>
+      <span class="lg"><span class="lg-seg" style="background:var(--ok)"></span>Phase en cours (à l'heure)</span>
+      <span class="lg"><span class="lg-seg" style="background:var(--late)"></span>En cours (en retard)</span>
+      <span class="lg"><span class="lg-seg" style="background:var(--line)"></span>Phase à venir</span>
+      <span class="lg"><span class="lg-dia" style="background:var(--sent)"></span>Date d'envoi</span>
+    </div>`;
+
+  // Centrer la frise sur aujourd'hui
+  const sc = document.getElementById("gantt-scroll");
+  if(sc) sc.scrollLeft = Math.max(0, todayX - 240);
+}
+
+// ---------- actions ----------
+async function advance(id,delta){
+  const nl = data.find(x=>x.id===id); if(!nl) return;
+  nl.phase = Math.max(0, Math.min(3, nl.phase+delta));
+  if(!nl.history) nl.history = {};
+  nl.history[nl.phase] = new Date().toISOString();
+  // au passage en « Envoyée », on capture la date d'envoi réelle (aujourd'hui) si absente
+  if(nl.phase===3 && !nl.dateReelle) nl.dateReelle = todayMidnight().toISOString().slice(0,10);
+  await save(); render();
+}
+
+function openModal(id){
+  editingId = id || null;
+  const t = document.getElementById("modal-title");
+  const del = document.getElementById("del-btn");
+  if(editingId){
+    const nl = data.find(x=>x.id===editingId);
+    t.textContent = "Modifier la newsletter";
+    f("f-name").value = nl.name; f("f-venue").value = nl.venue;
+    f("f-type").value = nl.type; f("f-date").value = nl.date||"";
+    f("f-phase").value = nl.phase;
+    f("f-datereelle").value = nl.dateReelle||"";
+    del.style.visibility="visible";
+  }else{
+    t.textContent = "Nouvelle newsletter";
+    f("f-name").value=""; f("f-venue").value="Accor Arena"; f("f-type").value="BTC";
+    f("f-date").value=""; f("f-phase").value="0"; f("f-datereelle").value="";
+    del.style.visibility="hidden";
+  }
+  document.getElementById("overlay").classList.add("show");
+  setTimeout(()=>f("f-name").focus(),50);
+}
+function closeModal(){ document.getElementById("overlay").classList.remove("show"); }
+
+async function saveModal(){
+  const name = f("f-name").value.trim();
+  if(!name){ f("f-name").focus(); return; }
+  const phase = parseInt(f("f-phase").value,10);
+  let dateReelle = f("f-datereelle").value || null;
+  // si marquée Envoyée sans date réelle saisie, on met aujourd'hui par défaut
+  if(phase===3 && !dateReelle) dateReelle = todayMidnight().toISOString().slice(0,10);
+  const payload = {
+    name, venue:f("f-venue").value, type:f("f-type").value,
+    date:f("f-date").value||null, phase, dateReelle
+  };
+  if(editingId){ Object.assign(data.find(x=>x.id===editingId), payload); }
+  else{ data.push({id:crypto.randomUUID(), history:{}, ...payload}); }
+  await save(); closeModal(); render();
+}
+async function deleteCurrent(){
+  if(!editingId) return;
+  const id = editingId;
+  data = data.filter(x=>x.id!==id);
+  await dbDelete(id); closeModal(); render();
+}
+
+function setView(v){
+  view=v;
+  document.getElementById("v-synthese").classList.toggle("on",v==="synthese");
+  document.getElementById("v-board").classList.toggle("on",v==="board");
+  document.getElementById("v-timeline").classList.toggle("on",v==="timeline");
+  document.getElementById("v-gantt").classList.toggle("on",v==="gantt");
+  render();
+}
+
+// ---------- panneau de réglages ----------
+const SALLES = ["Accor Arena","Adidas Arena","Bataclan","PEC"];
+function openReglages(){
+  const rows = SALLES.map(v=>{
+    const r = reglesSalle(v);
+    return `<div class="reg-row">
+      <span class="rv"><span class="dot" style="background:${VENUE_COLOR[v]}"></span>${v}</span>
+      <input type="number" min="0" max="60" id="reg-${slug(v)}-prod" value="${r.prod}">
+      <input type="number" min="0" max="60" id="reg-${slug(v)}-montage" value="${r.montage}">
+      <input type="number" min="0" max="60" id="reg-${slug(v)}-validation" value="${r.validation}">
+    </div>`;
+  }).join("");
+  document.getElementById("reg-rows").innerHTML = rows;
+  document.getElementById("reg-surveiller").value = statutsRegles.surveiller;
+  document.getElementById("reg-tolerance").value = statutsRegles.tolerance;
+  document.getElementById("reglages-overlay").classList.add("show");
+}
+function closeReglages(){ document.getElementById("reglages-overlay").classList.remove("show"); }
+function slug(v){ return v.toLowerCase().replace(/[^a-z]/g,""); }
+
+async function saveReglagesModal(){
+  SALLES.forEach(v=>{
+    const g = id => Math.max(0, parseInt(document.getElementById("reg-"+slug(v)+"-"+id).value,10)||0);
+    let prod=g("prod"), montage=g("montage"), validation=g("validation");
+    // garantir l'ordre logique prod ≥ montage ≥ validation ≥ 0
+    montage = Math.min(montage, prod);
+    validation = Math.min(validation, montage);
+    regles[v] = { prod, montage, validation };
+  });
+  statutsRegles = {
+    surveiller: Math.max(0, parseInt(document.getElementById("reg-surveiller").value,10)||0),
+    tolerance:  Math.max(0, parseInt(document.getElementById("reg-tolerance").value,10)||0),
+  };
+  await saveRegles();
+  await saveStatuts();
+  closeReglages();
+  render();
+}
+async function resetReglages(){
+  regles = JSON.parse(JSON.stringify(REGLES_DEFAUT));
+  statutsRegles = { ...STATUTS_DEFAUT };
+  await saveRegles();
+  await saveStatuts();
+  closeReglages();
+  render();
+}
+
+// ---------- import Asana ----------
+let asanaDiff = [];
+
+// --- synchro automatique par URL de flux ---
+function openAsana(){
+  asanaDiff = [];
+  document.getElementById("asana-paste").value = "";
+  document.getElementById("asana-search").value = "";
+  document.getElementById("asana-preview").style.display="none";
+  document.getElementById("asana-apply").style.display="none";
+  document.getElementById("asana-count").textContent = "";
+  document.getElementById("sync-url").value = syncCfg.url;
+  document.getElementById("sync-min").value = syncCfg.minutes;
+  document.getElementById("sync-actif").checked = syncCfg.actif;
+  document.getElementById("sync-creer").checked = syncCfg.creer;
+  document.getElementById("asana-manuel").open = !syncCfg.actif && !syncCfg.url;
+  majSyncStatus();
+  document.getElementById("asana-overlay").classList.add("show");
+}
+function closeAsana(){ document.getElementById("asana-overlay").classList.remove("show"); }
+
+function majSyncStatus(msg, cls){
+  const el = document.getElementById("sync-status");
+  if(!el) return;
+  if(msg!==undefined){ el.textContent = msg; el.className = "sync-status "+(cls||""); return; }
+  if(syncCfg._dernier){ el.textContent = syncCfg._dernier.msg; el.className = "sync-status "+(syncCfg._dernier.ok?"ok":"err"); }
+  else if(syncCfg.actif && syncCfg.url){ el.textContent = "Synchronisation active, en attente du prochain cycle…"; el.className="sync-status run"; }
+  else { el.textContent = ""; el.className="sync-status"; }
+}
+
+function planifierSync(){
+  if(syncTimer){ clearInterval(syncTimer); syncTimer=null; }
+  if(syncCfg.actif && syncCfg.url && syncCfg.minutes>0){
+    syncTimer = setInterval(()=>syncDepuisSource(false), syncCfg.minutes*60000);
+  }
+}
+
+async function enregistrerSync(){
+  syncCfg.url = document.getElementById("sync-url").value.trim();
+  syncCfg.minutes = Math.max(0, parseInt(document.getElementById("sync-min").value,10)||0);
+  syncCfg.actif = document.getElementById("sync-actif").checked;
+  syncCfg.creer = document.getElementById("sync-creer").checked;
+  await saveSync();
+  planifierSync();
+  if(syncCfg.actif && syncCfg.url) syncDepuisSource(true);
+  else majSyncStatus("Réglages enregistrés.", "ok");
+}
+
+async function syncDepuisSource(manuel){
+  if(!syncCfg.url){ majSyncStatus("Renseignez d'abord l'URL du flux.", "err"); return; }
+  majSyncStatus("Synchronisation en cours…", "run");
+  try{
+    const res = await fetch(syncCfg.url, { cache:"no-store" });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const text = await res.text();
+    const rows = parseAsanaText(text);
+    let maj=0, cree=0, inconnues=0;
+    for(const r of rows){
+      if(!r.date) continue;
+      const nl = data.find(x=>normName(x.name)===normName(r.name));
+      if(nl){ if(nl.date!==r.date){ nl.date=r.date; maj++; } }
+      else if(syncCfg.creer){
+        const g = devine(r.name);
+        data.push({id:crypto.randomUUID(), name:r.name.trim(), venue:g.venue, type:g.type, date:r.date, phase:0, history:{}});
+        cree++;
+      }
+      else inconnues++;
+    }
+    if(maj>0 || cree>0) await save();
+    const h = new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+    const bouts = [`${rows.length} tâche(s) lues`, `${maj} mise(s) à jour`];
+    if(cree) bouts.push(`${cree} créée(s)`);
+    if(inconnues) bouts.push(`${inconnues} sans correspondance`);
+    syncCfg._dernier = { ok:true, msg:`${h} · ${bouts.join(", ")}` };
+    render();
+    majSyncStatus();
+  }catch(e){
+    const h = new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+    syncCfg._dernier = { ok:false, msg:`${h} · échec (${e.message}). Le navigateur bloque peut-être l'accès à cette URL, ou le flux est inaccessible. Vérifiez que la source autorise le CORS, ou utilisez l'import manuel.` };
+    majSyncStatus();
+  }
+}
+
+
+function normName(s){
+  return (s||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+}
+function toISODate(v){
+  if(!v) return null;
+  v = String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0,10);
+  const d = new Date(v);
+  return isNaN(d) ? null : d.toISOString().slice(0,10);
+}
+
+// Parse une ligne CSV en tenant compte des guillemets
+function parseCsvLine(line){
+  const out=[]; let cur="", q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(q){
+      if(c==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; }
+      else cur+=c;
+    }else{
+      if(c==='"') q=true;
+      else if(c===",") { out.push(cur); cur=""; }
+      else cur+=c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+// Renvoie [{name, date}] à partir du texte collé (JSON ou CSV)
+function parseAsanaText(text){
+  text = text.trim();
+  if(!text) return [];
+  if(text[0]==="{" || text[0]==="["){
+    // Nettoyage : les retours à la ligne / tabulations bruts DANS les valeurs
+    // (ex. un titre Asana qui finit par un \n) cassent JSON.parse. On les neutralise.
+    const propre = text.replace(/[\u0000-\u001F]+/g, " ");
+    let j;
+    try { j = JSON.parse(propre); }
+    catch(e){ j = JSON.parse(text); }  // au cas où, on retente le texte d'origine
+    // Le tableau peut être enveloppé : {"root":[…]}, {"data":[…]}, {"json":[…]}…
+    // On déballe jusqu'à trouver le tableau, quel que soit le nom de la clé.
+    let garde = 0;
+    while(j && !Array.isArray(j) && typeof j === "object" && garde++ < 6){
+      if(Array.isArray(j.root)) { j = j.root; break; }
+      if(Array.isArray(j.data)) { j = j.data; break; }
+      if(Array.isArray(j.json)) { j = j.json; break; }
+      // sinon, on prend la première valeur qui est un tableau
+      const arr = Object.values(j).find(v => Array.isArray(v));
+      if(arr) { j = arr; break; }
+      // ou la première valeur objet à explorer
+      const obj = Object.values(j).find(v => v && typeof v === "object");
+      if(obj) { j = obj; } else break;
+    }
+    if(!Array.isArray(j)) j=[j];
+    return j.map(t=>({
+      name: t.name || t.Name || t["Task Name"] || "",
+      date: toISODate(t.due_on || t.due_at || t["Due On"] || t["Due Date"] || t.date)
+    })).filter(x=>x.name);
+  }
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  if(!lines.length) return [];
+  const header = parseCsvLine(lines[0]).map(h=>normName(h));
+  const iName = header.findIndex(h=>h==="name"||h==="nom"||h==="tache"||h==="task");
+  let iDate = header.findIndex(h=>h==="due date"||h==="echeance"||h==="date d envoi"||h==="date d envoi prevue"||h==="due on");
+  if(iName<0) throw new Error("Colonne « Name » introuvable dans le CSV.");
+  if(iDate<0) iDate = header.findIndex(h=>h.includes("date"));
+  return lines.slice(1).map(l=>{
+    const c = parseCsvLine(l);
+    return { name:(c[iName]||"").trim(), date: iDate>=0 ? toISODate(c[iDate]) : null };
+  }).filter(x=>x.name);
+}
+
+// Devine salle + cible à partir du nom, pour les créations
+function devine(name){
+  const brut = (name||"").trim();
+  // 1) Acronyme en tête de nom, SENSIBLE À LA CASSE (AA ≠ aa).
+  //    On isole le premier mot, avant un espace, un tiret ou un « - ».
+  const tete = brut.split(/[\s\-–—]/)[0];
+  let venue = null;
+  if(tete === "AA") venue = "Accor Arena";        // AA majuscules = Accor Arena
+  else if(tete === "aa") venue = "Adidas Arena";  // aa minuscules = Adidas Arena
+  else if(tete === "B") venue = "Bataclan";       // B = Bataclan
+  // 2) Sinon, mots-clés complets (insensibles à la casse).
+  if(!venue){
+    const n = normName(brut);
+    if(n.includes("accor")) venue = "Accor Arena";
+    else if(n.includes("adidas")) venue = "Adidas Arena";
+    else if(n.includes("bataclan")) venue = "Bataclan";
+    else venue = "PEC";  // défaut
+  }
+  const n = normName(brut);
+  let type = "Interne";
+  if(/\bbtc\b/.test(n)||n.includes("btoc")) type="BTC";
+  else if(/\bbtb\b/.test(n)||n.includes("btob")) type="BTB";
+  return {venue,type};
+}
+
+// Construit la liste : chaque tâche reçoit une action et un état "gardé"
+function construireDiff(rows){
+  return rows.map((r,i)=>{
+    let action, avant=null, id=null;
+    if(!r.date){ action="none"; }
+    else {
+      const nl = data.find(x=>normName(x.name)===normName(r.name));
+      if(!nl){ action="new"; }
+      else if(nl.date===r.date){ action="same"; id=nl.id; }
+      else { action="update"; id=nl.id; avant=nl.date; }
+    }
+    // par défaut : on garde les mises à jour (sûres), pas les créations (souvent du bruit)
+    const actionnable = (action==="update"||action==="new");
+    const garde = action==="update";
+    return { idx:i, name:r.name, date:r.date, action, avant, id, actionnable, garde };
+  });
+}
+
+function renderDiff(){
+  const q = normName(document.getElementById("asana-search").value);
+  const badge = {update:["pv-upd","maj"],new:["pv-new","créer"],same:["pv-same","à jour"],none:["pv-none","sans date"]};
+  const visibles = asanaDiff.filter(d=>!q || normName(d.name).includes(q));
+  const list = document.getElementById("asana-diff");
+
+  if(!visibles.length){
+    list.innerHTML = `<div class="prev-empty">Aucune tâche ne correspond à « ${escapeHtml(document.getElementById("asana-search").value)} ».</div>`;
+  } else {
+    list.innerHTML = visibles.map(d=>{
+      const [cls,lbl]=badge[d.action];
+      const date = d.action==="update" ? `${frDate(d.avant)} → ${frDate(d.date)}`
+                 : d.date ? frDate(d.date) : "—";
+      const box = d.actionnable
+        ? `<input type="checkbox" ${d.garde?"checked":""} onchange="toggleGarde(${d.idx},this.checked)">`
+        : `<span class="pv-spacer"></span>`;
+      return `<div class="prev-row ${d.actionnable?"":"disabled"}">
+        ${box}
+        <span class="pv-tag ${cls}">${lbl}</span>
+        <span class="pv-name">${escapeHtml(d.name)}</span>
+        <span class="pv-date">${date}</span></div>`;
+    }).join("");
+  }
+  majCompteurAsana();
+}
+
+function toggleGarde(idx,val){
+  const d = asanaDiff.find(x=>x.idx===idx);
+  if(d) d.garde = val;
+  majCompteurAsana();
+}
+function selectVisibles(val){
+  const q = normName(document.getElementById("asana-search").value);
+  asanaDiff.forEach(d=>{ if(d.actionnable && (!q || normName(d.name).includes(q))) d.garde=val; });
+  renderDiff();
+}
+function majCompteurAsana(){
+  const gardes = asanaDiff.filter(d=>d.actionnable && d.garde);
+  const maj = gardes.filter(d=>d.action==="update").length;
+  const neuf = gardes.filter(d=>d.action==="new").length;
+  const total = asanaDiff.length;
+  document.getElementById("asana-count").textContent =
+    `${total} tâche(s) détectée(s) · sélection : ${maj} mise(s) à jour, ${neuf} création(s)`;
+  document.getElementById("asana-apply").style.display = gardes.length>0 ? "inline-block" : "none";
+}
+
+function analyserColle(){
+  try{
+    const rows = parseAsanaText(document.getElementById("asana-paste").value);
+    if(!rows.length){ alert("Aucune tâche détectée. Vérifiez le format collé."); return; }
+    asanaDiff = construireDiff(rows);
+    document.getElementById("asana-search").value = "";
+    document.getElementById("asana-preview").style.display="block";
+    renderDiff();
+  }catch(e){ alert("Lecture impossible : "+e.message); }
+}
+
+async function appliquerAsana(){
+  let maj=0, cree=0;
+  for(const d of asanaDiff){
+    if(!d.garde || !d.actionnable) continue;
+    if(d.action==="update"){
+      const nl = data.find(x=>x.id===d.id); if(nl){ nl.date=d.date; maj++; }
+    }else if(d.action==="new"){
+      const g = devine(d.name);
+      data.push({id:crypto.randomUUID(), name:d.name, venue:g.venue, type:g.type, date:d.date, phase:0, history:{}});
+      cree++;
+    }
+  }
+  await save();
+  closeAsana();
+  render();
+}
+
+function f(id){ return document.getElementById(id); }
+function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeModal(); closeReglages(); closeAsana(); } });
+
+// ---------- authentification (lien magique, domaine PEC) ----------
+function gateMsg(txt, cls){
+  const el = document.getElementById("gate-msg");
+  el.textContent = txt; el.className = "gate-msg " + (cls||"info");
+}
+
+async function envoyerLien(){
+  const email = document.getElementById("gate-email").value.trim().toLowerCase();
+  if(!email){ gateMsg("Saisissez votre adresse e-mail.", "err"); return; }
+  if(!email.endsWith(DOMAINE_AUTORISE)){
+    gateMsg("Seules les adresses "+DOMAINE_AUTORISE+" sont autorisées.", "err"); return;
+  }
+  const btn = document.getElementById("gate-btn");
+  btn.disabled = true; gateMsg("Envoi du lien en cours…", "info");
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options:{ emailRedirectTo: window.location.href.split("#")[0] }
+  });
+  btn.disabled = false;
+  if(error){ gateMsg("Erreur : "+error.message, "err"); return; }
+  gateMsg("✓ Lien envoyé ! Ouvrez votre boîte mail ("+email+") et cliquez sur le lien pour vous connecter.", "ok");
+}
+
+async function seDeconnecter(){
+  await sb.auth.signOut();
+  location.reload();
+}
+
+// Une fois connecté et autorisé : on démarre l'application
+let demarre = false;
+async function demarrerApp(){
+  if(demarre) return; demarre = true;
+  document.getElementById("gate").style.display = "none";
+  document.getElementById("userbar").innerHTML =
+    `<span class="u-mail">${utilisateur.email}</span><button onclick="seDeconnecter()">Déconnexion</button>`;
+  await load();
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("foot").style.display = "block";
+  document.getElementById("foot").innerHTML =
+    `Le statut se calcule à partir de la date d'envoi prévue et des règles de rétroplanning par salle (bouton <code>⚙ Réglages</code>). Données partagées en temps réel avec toute l'équipe · réservé aux comptes <strong>${DOMAINE_AUTORISE}</strong>.`;
+  render();
+  ecouterTempsReel();
+  if(syncCfg.actif && syncCfg.url){ syncDepuisSource(false); planifierSync(); }
+}
+
+function traiterSession(session){
+  if(!session || !session.user){ document.getElementById("gate").style.display="flex"; return; }
+  const email = (session.user.email||"").toLowerCase();
+  if(!email.endsWith(DOMAINE_AUTORISE)){
+    // connecté avec un domaine non autorisé : on déconnecte
+    sb.auth.signOut();
+    document.getElementById("gate").style.display="flex";
+    gateMsg("Cette adresse n'est pas autorisée. Utilisez une adresse "+DOMAINE_AUTORISE+".", "err");
+    return;
+  }
+  utilisateur = session.user;
+  demarrerApp();
+}
+
+// ---------- init ----------
+(async function(){
+  // réagit à la connexion (retour du lien magique, ou session existante)
+  sb.auth.onAuthStateChange((event, session) => { traiterSession(session); });
+  const { data:{ session } } = await sb.auth.getSession();
+  traiterSession(session);
+})();
+</script>
