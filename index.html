@@ -274,6 +274,11 @@
   .gate-card input:focus{outline:2px solid var(--ink);outline-offset:-1px;border-color:var(--ink)}
   .gate-btn{width:100%;margin-top:14px;font-family:"Inter";font-size:14px;font-weight:600;border:0;background:var(--ink);color:#fff;padding:12px;border-radius:9px;cursor:pointer}
   .gate-btn:hover{opacity:.92} .gate-btn:disabled{opacity:.5;cursor:default}
+  .gate-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-2);margin-top:8px}
+  .gate-btn.ghost:hover{background:var(--surface-2);opacity:1}
+  .gate-tabs{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px;margin-bottom:18px}
+  .gate-tabs button{font-family:"Inter";font-size:13px;font-weight:500;border:0;background:transparent;color:var(--ink-2);padding:6px 14px;border-radius:6px;cursor:pointer}
+  .gate-tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
   .gate-msg{font-size:12px;margin-top:14px;line-height:1.5;min-height:16px}
   .gate-msg.ok{color:var(--ok)} .gate-msg.err{color:var(--late)} .gate-msg.info{color:var(--ink-2)}
   .gate-foot{font-size:11px;color:var(--ink-3);margin-top:22px;border-top:1px solid var(--line);padding-top:14px}
@@ -287,12 +292,28 @@
   <div class="gate-card">
     <span class="kicker">Régie CRM · Groupe PEC</span>
     <h1>Suivi des newsletters</h1>
-    <p>Accès réservé aux collaborateurs du Groupe PEC. Saisissez votre adresse professionnelle : vous recevrez un lien de connexion par e-mail, sans mot de passe.</p>
+    <p>Accès réservé aux collaborateurs du Groupe PEC (adresse <strong>@groupe-pec.com</strong>).</p>
+
+    <div class="gate-tabs">
+      <button id="gt-pass" class="on" onclick="gateMode('pass')">Mot de passe</button>
+      <button id="gt-link" onclick="gateMode('link')">Lien par e-mail</button>
+    </div>
+
     <label for="gate-email">Adresse e-mail professionnelle</label>
     <input id="gate-email" type="email" placeholder="prenom.nom@groupe-pec.com" autocomplete="email">
-    <button class="gate-btn" id="gate-btn" onclick="envoyerLien()">Recevoir mon lien de connexion</button>
+
+    <div id="gate-passfield">
+      <label for="gate-pass" style="margin-top:12px">Mot de passe</label>
+      <input id="gate-pass" type="password" placeholder="••••••••" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')seConnecterPass()">
+    </div>
+
+    <button class="gate-btn" id="gate-btn-pass" onclick="seConnecterPass()">Se connecter</button>
+    <button class="gate-btn ghost" id="gate-btn-signup" onclick="creerCompte()">Créer mon compte</button>
+    <button class="gate-btn" id="gate-btn-link" onclick="envoyerLien()" style="display:none">Recevoir mon lien de connexion</button>
+
     <div class="gate-msg info" id="gate-msg"></div>
-    <div class="gate-foot">Seules les adresses <strong>@groupe-pec.com</strong> sont autorisées. Le lien reçu est valable 1 heure.</div>
+    <div class="gate-foot" id="gate-foot">Première fois ? Créez votre compte avec l'adresse et un mot de passe de votre choix. Ensuite, connectez-vous directement.</div>
   </div>
 </div>
 
@@ -1483,19 +1504,64 @@ function f(id){ return document.getElementById(id); }
 function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeModal(); closeReglages(); closeAsana(); } });
 
-// ---------- authentification (lien magique, domaine PEC) ----------
+// ---------- authentification (mot de passe + lien magique, domaine PEC) ----------
 function gateMsg(txt, cls){
   const el = document.getElementById("gate-msg");
   el.textContent = txt; el.className = "gate-msg " + (cls||"info");
 }
+let gateModeCourant = "pass";
+function gateMode(m){
+  gateModeCourant = m;
+  document.getElementById("gt-pass").classList.toggle("on", m==="pass");
+  document.getElementById("gt-link").classList.toggle("on", m==="link");
+  document.getElementById("gate-passfield").style.display = m==="pass" ? "block" : "none";
+  document.getElementById("gate-btn-pass").style.display = m==="pass" ? "block" : "none";
+  document.getElementById("gate-btn-signup").style.display = m==="pass" ? "block" : "none";
+  document.getElementById("gate-btn-link").style.display = m==="link" ? "block" : "none";
+  document.getElementById("gate-foot").innerHTML = m==="pass"
+    ? "Première fois ? Créez votre compte avec l'adresse et un mot de passe de votre choix. Ensuite, connectez-vous directement."
+    : "Un lien de connexion vous sera envoyé par e-mail (valable 1 heure).";
+  gateMsg("", "info");
+}
+
+function emailValide(){
+  const email = document.getElementById("gate-email").value.trim().toLowerCase();
+  if(!email){ gateMsg("Saisissez votre adresse e-mail.", "err"); return null; }
+  if(!email.endsWith(DOMAINE_AUTORISE)){
+    gateMsg("Seules les adresses "+DOMAINE_AUTORISE+" sont autorisées.", "err"); return null;
+  }
+  return email;
+}
+
+async function seConnecterPass(){
+  const email = emailValide(); if(!email) return;
+  const pass = document.getElementById("gate-pass").value;
+  if(!pass){ gateMsg("Saisissez votre mot de passe.", "err"); return; }
+  gateMsg("Connexion…", "info");
+  const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+  if(error){
+    gateMsg(error.message.includes("Invalid") ? "E-mail ou mot de passe incorrect. Première fois ? Cliquez « Créer mon compte »." : "Erreur : "+error.message, "err");
+  }
+  // en cas de succès, onAuthStateChange prend le relais
+}
+
+async function creerCompte(){
+  const email = emailValide(); if(!email) return;
+  const pass = document.getElementById("gate-pass").value;
+  if(pass.length < 6){ gateMsg("Choisissez un mot de passe d'au moins 6 caractères.", "err"); return; }
+  gateMsg("Création du compte…", "info");
+  const { data, error } = await sb.auth.signUp({ email, password:pass });
+  if(error){ gateMsg("Erreur : "+error.message, "err"); return; }
+  if(data.session){
+    gateMsg("✓ Compte créé, connexion en cours…", "ok"); // onAuthStateChange prend le relais
+  } else {
+    gateMsg("Compte créé. Vous pouvez maintenant vous connecter avec votre mot de passe.", "ok");
+  }
+}
 
 async function envoyerLien(){
-  const email = document.getElementById("gate-email").value.trim().toLowerCase();
-  if(!email){ gateMsg("Saisissez votre adresse e-mail.", "err"); return; }
-  if(!email.endsWith(DOMAINE_AUTORISE)){
-    gateMsg("Seules les adresses "+DOMAINE_AUTORISE+" sont autorisées.", "err"); return;
-  }
-  const btn = document.getElementById("gate-btn");
+  const email = emailValide(); if(!email) return;
+  const btn = document.getElementById("gate-btn-link");
   btn.disabled = true; gateMsg("Envoi du lien en cours…", "info");
   const { error } = await sb.auth.signInWithOtp({
     email,
@@ -1503,7 +1569,7 @@ async function envoyerLien(){
   });
   btn.disabled = false;
   if(error){ gateMsg("Erreur : "+error.message, "err"); return; }
-  gateMsg("✓ Lien envoyé ! Ouvrez votre boîte mail ("+email+") et cliquez sur le lien pour vous connecter.", "ok");
+  gateMsg("✓ Lien envoyé ! Ouvrez votre boîte mail ("+email+") et cliquez sur le lien.", "ok");
 }
 
 async function seDeconnecter(){
