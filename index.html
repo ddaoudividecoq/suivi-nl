@@ -536,7 +536,7 @@ const STATUTS_DEFAUT = { surveiller:2, tolerance:1 };
 let statutsRegles = { ...STATUTS_DEFAUT };
 
 // Synchronisation automatique depuis une URL de flux (publié par le connecteur)
-const SYNC_DEFAUT = { url:"", minutes:15, actif:false, creer:true };
+const SYNC_DEFAUT = { url:"https://ddaoudividecoq.github.io/suivi-nl/newsletters.json", minutes:120, actif:true, creer:true };
 let syncCfg = { ...SYNC_DEFAUT };
 let syncTimer = null;
 
