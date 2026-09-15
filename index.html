@@ -130,6 +130,15 @@
   .reg-row input{width:100%;font-family:"Space Mono",monospace;font-size:14px;text-align:center;padding:7px 4px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
   .reg-row input:focus{outline:2px solid var(--ink);outline-offset:-1px;border-color:var(--ink)}
   .reg-warn{grid-column:1/-1;font-size:11px;color:var(--warn);font-family:"Inter"}
+  .reg-head2{display:grid;grid-template-columns:1.5fr 44px 1fr 1fr 1fr 28px;gap:8px;margin:8px 0 6px;font-size:11px;font-weight:600;color:var(--ink-3);font-family:"Space Mono",monospace}
+  .reg-salle-row{display:grid;grid-template-columns:1.5fr 44px 1fr 1fr 1fr 28px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+  .reg-salle-row input[type=text]{width:100%;font-family:"Inter";font-size:13px;font-weight:600;padding:7px 8px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
+  .reg-salle-row input[type=color]{width:38px;height:32px;padding:2px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);cursor:pointer}
+  .reg-salle-row input[type=number]{width:100%;font-family:"Space Mono",monospace;font-size:13px;text-align:center;padding:7px 4px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
+  .reg-del-x{border:0;background:none;color:var(--ink-3);font-size:16px;cursor:pointer;line-height:1;padding:4px}
+  .reg-del-x:hover{color:var(--late)}
+  .reg-cible-row{display:grid;grid-template-columns:1fr 28px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+  .reg-cible-row input{width:100%;font-family:"Inter";font-size:13px;font-weight:500;padding:7px 8px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
   .reg-sep{height:1px;background:var(--line-2);margin:18px 0 14px}
   .reg-h3{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:14px;margin:0 0 10px}
   .reg-statut-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
@@ -411,15 +420,24 @@
 </div>
 
 <div class="overlay" id="reglages-overlay" onclick="if(event.target===this)closeReglages()">
-  <div class="modal" style="max-width:540px">
-    <h2>Règles de rétroplanning et de statut</h2>
-    <p style="font-size:12px;color:var(--ink-2);margin:0 0 4px">
-      Pour chaque salle, indiquez à combien de jours avant l'envoi débute la production, puis à partir de quand la newsletter doit être en montage et en validation. Ces seuils déterminent où l'on est <em>censé</em> en être — et donc le passage en « en retard ».
+  <div class="modal" style="max-width:620px">
+    <h2>Réglages</h2>
+
+    <h3 class="reg-h3">Salles &amp; rétroplanning</h3>
+    <p style="font-size:12px;color:var(--ink-2);margin:0 0 10px">
+      Pour chaque salle : sa couleur, et à combien de jours avant l'envoi elle doit être en rédaction, montage, validation (ces seuils déterminent le passage « en retard »).
     </p>
-    <div class="reg-head">
-      <span></span><span>Rédaction J−</span><span>Montage J−</span><span>Validation J−</span>
+    <div class="reg-head2">
+      <span>Salle</span><span>Coul.</span><span>Réd. J−</span><span>Mont. J−</span><span>Valid. J−</span><span></span>
     </div>
-    <div id="reg-rows"></div>
+    <div id="reg-salles"></div>
+    <button class="linkbtn" style="margin-top:6px" onclick="ajouterSalle()">+ Ajouter une salle</button>
+
+    <div class="reg-sep"></div>
+    <h3 class="reg-h3">Cibles</h3>
+    <p style="font-size:12px;color:var(--ink-2);margin:0 0 10px">Les catégories de destinataires proposées à la création d'une newsletter.</p>
+    <div id="reg-cibles"></div>
+    <button class="linkbtn" style="margin-top:6px" onclick="ajouterCible()">+ Ajouter une cible</button>
 
     <div class="reg-sep"></div>
     <h3 class="reg-h3">Statuts</h3>
@@ -541,10 +559,20 @@ let syncCfg = { ...SYNC_DEFAUT };
 let syncTimer = null;
 
 const PHASES = ["Rédaction", "Montage", "Validation", "Envoyée"];
-const VENUE_COLOR = {
-  "Accor Arena":"var(--v-accor)", "Adidas Arena":"var(--v-adidas)",
-  "Bataclan":"var(--v-bataclan)", "PEC":"var(--v-groupe)"
+
+// Taxonomie personnalisable (salles + cibles), partagée via Supabase (app_settings)
+const TAXO_DEFAUT = {
+  salles: [
+    { nom:"Accor Arena",  couleur:"#B23A2E" },
+    { nom:"Adidas Arena", couleur:"#2B5E8F" },
+    { nom:"Bataclan",     couleur:"#6B4C9A" },
+    { nom:"PEC",          couleur:"#0F766E" },
+  ],
+  cibles: ["BTC","BTB","Interne"]
 };
+let taxo = JSON.parse(JSON.stringify(TAXO_DEFAUT));
+function sallesNoms(){ return taxo.salles.map(s=>s.nom); }
+function couleurSalle(nom){ const s = taxo.salles.find(x=>x.nom===nom); return s ? s.couleur : "var(--ink-3)"; }
 // ====== Configuration Supabase ======
 const SUPABASE_URL = "https://gyitqxxjatjwvjzezdnu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5aXRxeHhqYXRqd3ZqemV6ZG51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0OTMxMDAsImV4cCI6MjEwMzA2OTEwMH0.SOVkBKAH67hVPoQBveN5pKjns3YGoYz42KoYA2s10iI";
@@ -639,12 +667,31 @@ function nlToRow(nl){
 }
 
 async function load(){
-  // Réglages depuis le stockage local
-  const rg = lsGet(REGLES_KEY); if(rg) regles = Object.assign(JSON.parse(JSON.stringify(REGLES_DEFAUT)), rg);
-  const st = lsGet(STATUTS_KEY); if(st) statutsRegles = Object.assign({ ...STATUTS_DEFAUT }, st);
+  // Comportement de synchro : local au navigateur
   const sy = lsGet(SYNC_KEY); if(sy) syncCfg = Object.assign({ ...SYNC_DEFAUT }, sy);
-  // Newsletters depuis Supabase
+  // Réglages partagés (salles, cibles, rétroplanning, statuts) + newsletters : Supabase
+  await loadSettings();
   await reloadFromDb();
+}
+
+// Réglages partagés par toute l'équipe (table app_settings, ligne unique "global")
+async function loadSettings(){
+  try{
+    const { data:row, error } = await sb.from("app_settings").select("data").eq("id","global").maybeSingle();
+    if(error){ console.error("Lecture réglages impossible", error); return; }
+    const d = (row && row.data) || {};
+    if(d.regles)  regles = Object.assign(JSON.parse(JSON.stringify(REGLES_DEFAUT)), d.regles);
+    if(d.statuts) statutsRegles = Object.assign({ ...STATUTS_DEFAUT }, d.statuts);
+    if(Array.isArray(d.salles) && d.salles.length) taxo.salles = d.salles;
+    if(Array.isArray(d.cibles) && d.cibles.length) taxo.cibles = d.cibles;
+  }catch(e){ console.error(e); }
+}
+async function saveSettings(){
+  const payload = { id:"global",
+    data:{ regles, statuts:statutsRegles, salles:taxo.salles, cibles:taxo.cibles },
+    updated_at:new Date().toISOString() };
+  const { error } = await sb.from("app_settings").upsert(payload);
+  if(error) console.error("Écriture réglages impossible", error);
 }
 
 async function reloadFromDb(){
@@ -653,10 +700,14 @@ async function reloadFromDb(){
   data = (rows||[]).map(rowToNl);
 }
 
-// Enregistre (crée/met à jour) l'ensemble courant dans la base
-async function save(){
-  if(!data.length) return;
-  const { error } = await sb.from("newsletters").upsert(data.map(nlToRow));
+// Écritures ciblées : on n'envoie que la (les) ligne(s) réellement modifiée(s)
+async function dbUpsert(nl){
+  const { error } = await sb.from("newsletters").upsert(nlToRow(nl));
+  if(error) console.error("Écriture Supabase impossible", error);
+}
+async function dbUpsertMany(nls){
+  if(!nls || !nls.length) return;
+  const { error } = await sb.from("newsletters").upsert(nls.map(nlToRow));
   if(error) console.error("Écriture Supabase impossible", error);
 }
 async function dbDelete(id){
@@ -664,18 +715,33 @@ async function dbDelete(id){
   if(error) console.error("Suppression Supabase impossible", error);
 }
 
-// Abonnement temps réel : toute modification (par n'importe qui) recharge et réaffiche
+// Temps réel : on applique UNIQUEMENT la ligne changée, sans recharger toute la table
 function ecouterTempsReel(){
   sb.channel("newsletters-live")
-    .on("postgres_changes", { event:"*", schema:"public", table:"newsletters" }, async () => {
-      await reloadFromDb();
+    .on("postgres_changes", { event:"*", schema:"public", table:"newsletters" }, (payload) => {
+      if(payload.eventType === "DELETE"){
+        const id = payload.old && payload.old.id;
+        if(id) data = data.filter(x => x.id !== id);
+      } else {
+        const nl = rowToNl(payload.new);
+        const i = data.findIndex(x => x.id === nl.id);
+        if(i >= 0) data[i] = nl; else data.push(nl);
+      }
+      render();
+    })
+    .subscribe();
+  // Réglages partagés (salles, cibles, rétroplanning) : propagation temps réel
+  sb.channel("settings-live")
+    .on("postgres_changes", { event:"*", schema:"public", table:"app_settings" }, async () => {
+      await loadSettings();
       render();
     })
     .subscribe();
 }
 
-async function saveRegles(){ lsSet(REGLES_KEY, regles); }
-async function saveStatuts(){ lsSet(STATUTS_KEY, statutsRegles); }
+async function saveRegles(){ await saveSettings(); }
+async function saveStatuts(){ await saveSettings(); }
+async function saveTaxo(){ await saveSettings(); }
 async function saveSync(){ lsSet(SYNC_KEY, syncCfg); }
 function seed(){
   const t = todayMidnight();
@@ -740,7 +806,7 @@ function cardHTML(nl){
       <span class="timecode">${timecode(nl)}</span>
     </div>
     <div class="meta">
-      <span class="venue"><span class="dot" style="background:${VENUE_COLOR[nl.venue]||'var(--ink-3)'}"></span>${nl.venue}</span>
+      <span class="venue"><span class="dot" style="background:${couleurSalle(nl.venue)}"></span>${nl.venue}</span>
       <span class="tag">${nl.type}</span>
     </div>
     <div class="sendline">Envoi prévu · ${frDate(nl.date)||"à définir"}</div>
@@ -771,7 +837,7 @@ function renderDashboard(){
 
   // Par salle
   const parSalle = {};
-  SALLES.forEach(v => parSalle[v] = {late:0, warn:0, ok:0, sent:0, total:0});
+  sallesNoms().forEach(v => parSalle[v] = {late:0, warn:0, ok:0, sent:0, total:0});
   data.forEach(nl => {
     const s = statut(nl);
     if(!parSalle[nl.venue]) parSalle[nl.venue] = {late:0, warn:0, ok:0, sent:0, total:0};
@@ -802,7 +868,7 @@ function renderDashboard(){
   const enRetard = data.filter(nl => statut(nl)==="late")
     .sort((a,b) => (a.date||"z").localeCompare(b.date||"z"));
 
-  const dot = v => `<span class="dot" style="background:${VENUE_COLOR[v]||'var(--ink-3)'}"></span>`;
+  const dot = v => `<span class="dot" style="background:${couleurSalle(v)}"></span>`;
 
   // --- Bloc alerte si retards ---
   const alerte = c.late > 0
@@ -978,7 +1044,7 @@ function rowHTML(nl){
     <div class="when"><span class="tc">${timecode(nl)}</span>${frDate(nl.date)}</div>
     <div class="body">
       <span class="name">${escapeHtml(nl.name)}</span>
-      <span class="venue" style="margin-left:8px"><span class="dot" style="background:${VENUE_COLOR[nl.venue]||'var(--ink-3)'}"></span>${nl.venue} · ${nl.type} · ${PHASES[nl.phase]}</span>
+      <span class="venue" style="margin-left:8px"><span class="dot" style="background:${couleurSalle(nl.venue)}"></span>${nl.venue} · ${nl.type} · ${PHASES[nl.phase]}</span>
       ${railHTML(nl)}
     </div>
     <span class="status-pill ${s}">${STATUT_LABEL[s]}</span>
@@ -1000,7 +1066,8 @@ function renderGantt(){
   g.style.display="block";
 
   const dated = data.filter(nl=>nl.date);
-  const sansDate = data.length - dated.length;
+  const sansDateList = data.filter(nl=>!nl.date);
+  const sansDate = sansDateList.length;
 
   if(dated.length===0){
     g.innerHTML = `<div class="empty-col">Aucune newsletter avec date d'envoi. Ajoutez une date pour l'afficher sur la frise.</div>`;
@@ -1064,7 +1131,7 @@ function renderGantt(){
     return `<div class="gantt-row s-${s}" onclick="openModal('${nl.id}')">
       <div class="gantt-label" style="width:${LABEL_W}px">
         <span class="gl-name">${escapeHtml(nl.name)}</span>
-        <span class="gl-sub"><span class="dot" style="background:${VENUE_COLOR[nl.venue]||'var(--ink-3)'};width:8px;height:8px"></span>${nl.venue} · ${nl.type}</span>
+        <span class="gl-sub"><span class="dot" style="background:${couleurSalle(nl.venue)};width:8px;height:8px"></span>${nl.venue} · ${nl.type}</span>
       </div>
       <div class="gantt-track" style="width:${timelineW}px">
         <div class="gl-name-top" style="left:${xProd}px;max-width:${barW+140}px">${escapeHtml(nl.name)}</div>
@@ -1081,7 +1148,7 @@ function renderGantt(){
   const todayX = xForDate(today) + DAY_W/2;
 
   g.innerHTML =
-    (sansDate ? `<div class="gantt-note">${sansDate} newsletter(s) sans date d'envoi — non affichée(s) ici.</div>` : "") +
+    (sansDate ? `<div class="gantt-note">⚠ ${sansDate} newsletter(s) sans date d'envoi, non affichée(s) ci-dessous : ${sansDateList.map(nl=>escapeHtml(nl.name)).join(" · ")}. Renseignez leur date d'envoi pour les faire apparaître.</div>` : "") +
     `<div class="gantt-scroll" id="gantt-scroll">
       <div class="gantt-inner" style="width:${totalW}px">
         <div class="gantt-axis">
@@ -1121,11 +1188,19 @@ async function advance(id,delta){
   nl.history[nl.phase] = new Date().toISOString();
   // au passage en « Envoyée », on capture la date d'envoi réelle (aujourd'hui) si absente
   if(nl.phase===3 && !nl.dateReelle) nl.dateReelle = todayMidnight().toISOString().slice(0,10);
-  await save(); render();
+  await dbUpsert(nl); render();
+}
+
+function peuplerSelectsModal(){
+  document.getElementById("f-venue").innerHTML =
+    taxo.salles.map(s=>`<option value="${escapeHtml(s.nom)}">${escapeHtml(s.nom)}</option>`).join("");
+  document.getElementById("f-type").innerHTML =
+    taxo.cibles.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
 }
 
 function openModal(id){
   editingId = id || null;
+  peuplerSelectsModal();
   const t = document.getElementById("modal-title");
   const del = document.getElementById("del-btn");
   if(editingId){
@@ -1138,7 +1213,9 @@ function openModal(id){
     del.style.visibility="visible";
   }else{
     t.textContent = "Nouvelle newsletter";
-    f("f-name").value=""; f("f-venue").value="Accor Arena"; f("f-type").value="BTC";
+    f("f-name").value="";
+    f("f-venue").value = taxo.salles[0] ? taxo.salles[0].nom : "";
+    f("f-type").value = taxo.cibles[0] || "";
     f("f-date").value=""; f("f-phase").value="0"; f("f-datereelle").value="";
     del.style.visibility="hidden";
   }
@@ -1158,9 +1235,10 @@ async function saveModal(){
     name, venue:f("f-venue").value, type:f("f-type").value,
     date:f("f-date").value||null, phase, dateReelle
   };
-  if(editingId){ Object.assign(data.find(x=>x.id===editingId), payload); }
-  else{ data.push({id:crypto.randomUUID(), history:{}, ...payload}); }
-  await save(); closeModal(); render();
+  let cible;
+  if(editingId){ cible = data.find(x=>x.id===editingId); Object.assign(cible, payload); }
+  else{ cible = {id:crypto.randomUUID(), history:{}, ...payload}; data.push(cible); }
+  await dbUpsert(cible); closeModal(); render();
 }
 async function deleteCurrent(){
   if(!editingId) return;
@@ -1179,48 +1257,105 @@ function setView(v){
 }
 
 // ---------- panneau de réglages ----------
-const SALLES = ["Accor Arena","Adidas Arena","Bataclan","PEC"];
+// brouillon d'édition (pour permettre Annuler sans toucher aux données live)
+let editSalles = [], editCibles = [];
+
 function openReglages(){
-  const rows = SALLES.map(v=>{
-    const r = reglesSalle(v);
-    return `<div class="reg-row">
-      <span class="rv"><span class="dot" style="background:${VENUE_COLOR[v]}"></span>${v}</span>
-      <input type="number" min="0" max="60" id="reg-${slug(v)}-prod" value="${r.prod}">
-      <input type="number" min="0" max="60" id="reg-${slug(v)}-montage" value="${r.montage}">
-      <input type="number" min="0" max="60" id="reg-${slug(v)}-validation" value="${r.validation}">
-    </div>`;
-  }).join("");
-  document.getElementById("reg-rows").innerHTML = rows;
+  editSalles = JSON.parse(JSON.stringify(taxo.salles));
+  editCibles = JSON.parse(JSON.stringify(taxo.cibles));
+  renderReglagesSalles();
+  renderReglagesCibles();
   document.getElementById("reg-surveiller").value = statutsRegles.surveiller;
   document.getElementById("reg-tolerance").value = statutsRegles.tolerance;
   document.getElementById("reglages-overlay").classList.add("show");
 }
 function closeReglages(){ document.getElementById("reglages-overlay").classList.remove("show"); }
-function slug(v){ return v.toLowerCase().replace(/[^a-z]/g,""); }
+
+function lireSaisiesSalles(){
+  // récupère les valeurs actuelles des champs dans editSalles avant un re-render
+  editSalles.forEach((s,i)=>{
+    const n = document.getElementById("rs-nom-"+i); if(n) s.nom = n.value;
+    const c = document.getElementById("rs-col-"+i); if(c) s.couleur = c.value;
+    const g = k => { const el=document.getElementById("rs-"+k+"-"+i); return el?Math.max(0,parseInt(el.value,10)||0):0; };
+    s._prod = g("prod"); s._montage = g("montage"); s._validation = g("validation");
+  });
+}
+function renderReglagesSalles(){
+  document.getElementById("reg-salles").innerHTML = editSalles.map((s,i)=>{
+    const r = (s._prod!==undefined) ? {prod:s._prod,montage:s._montage,validation:s._validation}
+                                    : (regles[s.nom] || regles["default"]);
+    return `<div class="reg-salle-row">
+      <input type="text" id="rs-nom-${i}" value="${escapeHtml(s.nom)}" placeholder="Nom de la salle">
+      <input type="color" id="rs-col-${i}" value="${s.couleur||'#7C8896'}">
+      <input type="number" min="0" max="90" id="rs-prod-${i}" value="${r.prod}">
+      <input type="number" min="0" max="90" id="rs-montage-${i}" value="${r.montage}">
+      <input type="number" min="0" max="90" id="rs-validation-${i}" value="${r.validation}">
+      <button class="reg-del-x" title="Supprimer" onclick="supprimerSalle(${i})">✕</button>
+    </div>`;
+  }).join("");
+}
+function ajouterSalle(){
+  lireSaisiesSalles();
+  editSalles.push({ nom:"Nouvelle salle", couleur:"#5A6472", _prod:10, _montage:5, _validation:3 });
+  renderReglagesSalles();
+}
+function supprimerSalle(i){
+  lireSaisiesSalles();
+  editSalles.splice(i,1);
+  renderReglagesSalles();
+}
+
+function lireSaisiesCibles(){
+  editCibles = editCibles.map((c,i)=>{ const el=document.getElementById("rc-"+i); return el?el.value:c; });
+}
+function renderReglagesCibles(){
+  document.getElementById("reg-cibles").innerHTML = editCibles.map((c,i)=>
+    `<div class="reg-cible-row">
+      <input type="text" id="rc-${i}" value="${escapeHtml(c)}" placeholder="Nom de la cible">
+      <button class="reg-del-x" title="Supprimer" onclick="supprimerCible(${i})">✕</button>
+    </div>`).join("");
+}
+function ajouterCible(){ lireSaisiesCibles(); editCibles.push("Nouvelle cible"); renderReglagesCibles(); }
+function supprimerCible(i){ lireSaisiesCibles(); editCibles.splice(i,1); renderReglagesCibles(); }
 
 async function saveReglagesModal(){
-  SALLES.forEach(v=>{
-    const g = id => Math.max(0, parseInt(document.getElementById("reg-"+slug(v)+"-"+id).value,10)||0);
-    let prod=g("prod"), montage=g("montage"), validation=g("validation");
-    // garantir l'ordre logique prod ≥ montage ≥ validation ≥ 0
-    montage = Math.min(montage, prod);
-    validation = Math.min(validation, montage);
-    regles[v] = { prod, montage, validation };
+  lireSaisiesSalles();
+  lireSaisiesCibles();
+  // Salles : nettoyer, dédupliquer, reconstruire regles
+  const nouvellesSalles = [];
+  const nouvellesRegles = { default: regles["default"] || { prod:10, montage:5, validation:3 } };
+  editSalles.forEach(s=>{
+    const nom = (s.nom||"").trim();
+    if(!nom) return;
+    if(nouvellesSalles.some(x=>x.nom===nom)) return; // pas de doublon
+    nouvellesSalles.push({ nom, couleur: s.couleur || "#5A6472" });
+    let prod=s._prod??10, montage=s._montage??5, validation=s._validation??3;
+    montage = Math.min(montage, prod); validation = Math.min(validation, montage);
+    nouvellesRegles[nom] = { prod, montage, validation };
   });
+  if(!nouvellesSalles.length){ alert("Gardez au moins une salle."); return; }
+  // Cibles : nettoyer, dédupliquer
+  const nouvellesCibles = [];
+  editCibles.forEach(c=>{ const v=(c||"").trim(); if(v && !nouvellesCibles.includes(v)) nouvellesCibles.push(v); });
+  if(!nouvellesCibles.length){ alert("Gardez au moins une cible."); return; }
+
+  taxo.salles = nouvellesSalles;
+  taxo.cibles = nouvellesCibles;
+  regles = nouvellesRegles;
   statutsRegles = {
     surveiller: Math.max(0, parseInt(document.getElementById("reg-surveiller").value,10)||0),
     tolerance:  Math.max(0, parseInt(document.getElementById("reg-tolerance").value,10)||0),
   };
-  await saveRegles();
-  await saveStatuts();
+  await saveSettings();
   closeReglages();
   render();
 }
 async function resetReglages(){
+  if(!confirm("Réinitialiser salles, cibles et règles aux valeurs par défaut ?")) return;
+  taxo = JSON.parse(JSON.stringify(TAXO_DEFAUT));
   regles = JSON.parse(JSON.stringify(REGLES_DEFAUT));
   statutsRegles = { ...STATUTS_DEFAUT };
-  await saveRegles();
-  await saveStatuts();
+  await saveSettings();
   closeReglages();
   render();
 }
@@ -1282,18 +1417,20 @@ async function syncDepuisSource(manuel){
     const text = await res.text();
     const rows = parseAsanaText(text);
     let maj=0, cree=0, inconnues=0;
+    const modifies = [];
     for(const r of rows){
       if(!r.date) continue;
       const nl = data.find(x=>normName(x.name)===normName(r.name));
-      if(nl){ if(nl.date!==r.date){ nl.date=r.date; maj++; } }
+      if(nl){ if(nl.date!==r.date){ nl.date=r.date; maj++; modifies.push(nl); } }
       else if(syncCfg.creer){
         const g = devine(r.name);
-        data.push({id:crypto.randomUUID(), name:r.name.trim(), venue:g.venue, type:g.type, date:r.date, phase:0, history:{}});
+        const neuf = {id:crypto.randomUUID(), name:r.name.trim(), venue:g.venue, type:g.type, date:r.date, phase:0, history:{}};
+        data.push(neuf); modifies.push(neuf);
         cree++;
       }
       else inconnues++;
     }
-    if(maj>0 || cree>0) await save();
+    if(modifies.length) await dbUpsertMany(modifies);
     const h = new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
     const bouts = [`${rows.length} tâche(s) lues`, `${maj} mise(s) à jour`];
     if(cree) bouts.push(`${cree} créée(s)`);
@@ -1485,17 +1622,19 @@ function analyserColle(){
 
 async function appliquerAsana(){
   let maj=0, cree=0;
+  const modifies = [];
   for(const d of asanaDiff){
     if(!d.garde || !d.actionnable) continue;
     if(d.action==="update"){
-      const nl = data.find(x=>x.id===d.id); if(nl){ nl.date=d.date; maj++; }
+      const nl = data.find(x=>x.id===d.id); if(nl){ nl.date=d.date; maj++; modifies.push(nl); }
     }else if(d.action==="new"){
       const g = devine(d.name);
-      data.push({id:crypto.randomUUID(), name:d.name, venue:g.venue, type:g.type, date:d.date, phase:0, history:{}});
+      const neuf = {id:crypto.randomUUID(), name:d.name, venue:g.venue, type:g.type, date:d.date, phase:0, history:{}};
+      data.push(neuf); modifies.push(neuf);
       cree++;
     }
   }
-  await save();
+  await dbUpsertMany(modifies);
   closeAsana();
   render();
 }
